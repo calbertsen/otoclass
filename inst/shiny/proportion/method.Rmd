@@ -1,0 +1,6 @@
+
+# Description
+
+This Shiny app is build on the R-package `otoclass`. All code is available from <http://github.com/calbertsen/otoclass>.
+
+

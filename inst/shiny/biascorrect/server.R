@@ -11,13 +11,14 @@ shinyServer(function(input,output){
     #Simulate a data set
     simData <- reactive({
         nGroup <- round(input$Ns * c(input$ps,1-input$ps))
-        sigma <- matrix(c(1,input$rho,input$rho,1),ncol=2)
-        mu <- cbind(c(input$x1,input$y1),c(input$x2,input$y2))
+        sigma <- list(input$sd * matrix(c(1,input$rho,input$rho,1),ncol=2),
+                      matrix(c(1,input$rho,input$rho,1),ncol=2))
+        mu <- cbind(c(input$x1,input$y1),c(0,0))
 
         tr <-array(dim=c(0,2))
         gr <- numeric(0)
         for(i in 1:length(nGroup)){
-            tr <- rbind(tr,rmvnorm(sum(nGroup[i])*100,mu[,i],sigma))
+            tr <- rbind(tr,rmvnorm(sum(nGroup[i])*100,mu[,i],sigma[[i]]))
             gr <- c(gr,rep(i,sum(nGroup[i])*100))
         }
         data.frame(group=factor(gr),tr)
@@ -81,7 +82,7 @@ shinyServer(function(input,output){
                              function(x)x/sum(x))
   
            
-            progress$inc(0.5/n, detail = paste("error from new sample", r))
+            progress$inc(0.5/n, detail = paste("proportions from new sample", r))
             #New sample to test
             bdat <- bootstrap_data(dat[,-1][,indxUse],factor(dat[,1]),nGroup,nGroupT)
             fitknn1 <- otoclass::knn(train=bdat$train,

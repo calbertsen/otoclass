@@ -11,19 +11,19 @@ This Shiny app is build on the R-package `otoclass`. All code is available from 
 Following the method of [@wilkins2000a], the confusion matrix $M$ is calculated from a bootstrap sample. The $i$th column of $M$ is calculated as the proportion from group $i$ classified as each of the other groups. Given a confusion matrix $M$ and a vector of proportions classified to each group, $x$, an estimate of the true proportions is
 
 $$
-\hat{\theta} = M^{-1/2}x.
+\hat{\theta} = M^{-1}x.
 $$
 
 If the estimator results in negative proportions, then the estimate of the true proportion is set to 0, and $M'$ is constructed from $M$ by removing the corresponding column. An estimate of the remaining proportions is then,
 
 $$
-\hat{\theta}' = (M'^TM')^{-1/2}M'^Tx
+\hat{\theta}' = (M'^TM')^{-1}M'^Tx
 $$
 
 This procedure is continued until there are no negative proportions.
 The procedure is unstable when $M$ is close to singular.
 
-In this app $\hat{\theta}_i = M_i^{-1/2}x_i$  is calculated by calculating $M_i$ and $x_i$ from two independent bootstrap samples.
+In this app $\hat{\theta}_i = M_i^{-1}x_i$  is calculated by calculating $M_i$ and $x_i$ from two independent bootstrap samples.
 
 
 

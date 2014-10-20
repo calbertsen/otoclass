@@ -162,12 +162,17 @@ shinyServer(function(input,output){
         dat <- readDat()
         group <- factor(dat[,input$classgroup])
         datrest <- dat[,input$indxUse]
+        npred <- length(input$indxUse)	
+	if(npred == 1){
+           datrest <- matrix(datrest,ncol=1)
+        }
         
         resknn1 <- array(dim=c(n,nlevels(group)))
         resknn3 <- array(dim=c(n,nlevels(group)))
         resqda <- array(dim=c(n,nlevels(group)))
         reslda <- array(dim=c(n,nlevels(group)))
         correctClass <- array(dim=c(n,4))
+        
 
         progress$set(message = "Bootstrapping", value = 0)
         for(r in 1:n){
@@ -175,6 +180,7 @@ shinyServer(function(input,output){
             bdat <- bootstrap_data(datrest,
                                    group,
                                    nGroup,nGroupT)
+
             fitknn1 <- otoclass::knn(train=bdat$train,
                                      test=bdat$test,
                                      group=bdat$groupTrain,
@@ -191,7 +197,7 @@ shinyServer(function(input,output){
             fitlda <- discrim(train=bdat$train,
                               test=bdat$test,
                               group=bdat$groupTrain,
-                              type="rrlda",
+                              type="lda",
                               verbose=FALSE)
             
             resknn1[r,] <- table(fitknn1$predicted)/length(bdat$groupTest)

@@ -2,7 +2,12 @@
 mvnorm <- function(x,mn,sig){
     -0.5*log(det(sig)) - 0.5*(x-mn)%*%solve(sig)%*%(x-mn) -0.5*dim(sig)[1]*log(2*pi)
 }
-
+which.max.safe <- function(x,grplevel){
+    if(all(is.na(x)))
+        return(NA)
+    grplevel[which.max(x)]
+    
+}
 
 #' Discriminant analysis
 #'
@@ -21,8 +26,7 @@ mvnorm <- function(x,mn,sig){
 #' @export
 discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "normal", prior = table(group)/length(group), nrr = rank){
 
- 
-
+    
     if(type == "rrlda"){
         mn <- sapply(1:nlevels(group),
                      function(i)apply(train[as.numeric(group)==i,],2,mean))
@@ -48,19 +52,20 @@ discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "norma
 
  
     mn <- sapply(1:nlevels(group),
-                 function(i)apply(trainUse[as.numeric(group)==i,],2,mean))
+                 function(i)apply(matrix(trainUse[as.numeric(group)==i,],ncol=dim(trainUse)[2]),2,mean))
 
+    mn <- matrix(mn,ncol=nlevels(group))
     
     if(type == "qda"){
         sig <- sapply(1:nlevels(group),
-                      function(i)list(cov(trainUse[as.numeric(group)==i,]-mn[,i])))
+                      function(i)list(cov(matrix(trainUse[as.numeric(group)==i,]-mn[,i],ncol=dim(trainUse)[2]))))
 
         lnorm <- function(i){
             apply(testUse,1,function(x)mvnorm(as.vector(x),mn=as.vector(mn[,i]),sig=sig[[i]]))+lpi[i]
         }
 
     }else{
-        sig <- cov(trainUse-t(mn[,group]))
+        sig <- cov(trainUse-t(matrix(mn[,group],nrow=dim(mn)[1])))
         lnorm <- function(i){
             apply(testUse,1,function(x)mvnorm(as.vector(x),mn=as.vector(mn[,i]),sig=sig))+lpi[i]
         }
@@ -68,7 +73,7 @@ discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "norma
 
     lps <- sapply(1:nlevels(group),lnorm)
     prop <- t(apply(lps,1,function(x)exp(x)/sum(exp(x))))
-  
+    prop[is.nan(prop)] <- NA
     res <- list()
     class(res) <- "oto_discrim"
 
@@ -76,7 +81,9 @@ discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "norma
     res$probabilities <- prop
     colnames(res$probabilities) <- levels(group)
     #rownames(res$probabilities) <- rownames(test)
-    res$predicted <- factor(levels(group)[apply(prop,1,which.max)], levels = levels(group))
+    #res$predicted <- factor(levels(group)[apply(prop,1,which.max)], levels = levels(group))
+    res$predicted <- factor(apply(prop,1,which.max.safe,grplevel=levels(group)),levels = levels(group))
+ 
     res$tranfmat <- transfmat
     res$sig <- sig
     return(res)

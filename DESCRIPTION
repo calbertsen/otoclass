@@ -1,7 +1,7 @@
 Package: otoclass
 Type: Package
 Title: Otolith Classification and Proportion Estimation
-Version: 1.0
+Version: 0.0.1
 Date: 2014-09-12
 Author: Christoffer Moesgaard Albertsen
 Maintainer: Christoffer Moesgaard Albertsen <cmoe@aqua.dtu.dk>

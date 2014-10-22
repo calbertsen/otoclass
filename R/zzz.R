@@ -1,6 +1,5 @@
 #' @useDynLib otoclass
 #' @importFrom Rcpp evalCpp
-#' @import TMB
 
 .onLoad <- function(libname,pkgname){
     #path <- paste(libname,pkgname,"TMB","",sep="/")

@@ -64,7 +64,7 @@ shinyUI(
                                    uiOutput('selectShowGroup'),
                                    h3("Estimated proportions"),
                                    plotOutput("proportionplot"),
-                                   h2("Summary of estimates with correction"),
+                                   h2("Summary of estimates"),
                                    tableOutput("summarytable"),
                                    h2("Classification success rate"),
                                    plotOutput("ccplot2tal")

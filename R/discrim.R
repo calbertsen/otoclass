@@ -78,11 +78,12 @@ discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "norma
     class(res) <- "oto_discrim"
 
     res$type <- type
+    res$logProbabilities <- lps
     res$probabilities <- prop
     colnames(res$probabilities) <- levels(group)
     #rownames(res$probabilities) <- rownames(test)
     #res$predicted <- factor(levels(group)[apply(prop,1,which.max)], levels = levels(group))
-    res$predicted <- factor(apply(prop,1,which.max.safe,grplevel=levels(group)),levels = levels(group))
+    res$predicted <- factor(apply(lps,1,which.max.safe,grplevel=levels(group)),levels = levels(group))
  
     res$tranfmat <- transfmat
     res$sig <- sig

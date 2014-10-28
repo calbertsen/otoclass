@@ -76,7 +76,7 @@ flip_image <- function(dat,datCompare,forceFlip=FALSE){
 #' @export
 read_image<- function(file,noiseFactor = 4, onlyOne = FALSE, minPixelDiff = 20){
     require(raster)
-    library(reshape2)
+    require(reshape2)
     r<-raster(file)
     r[r[]< max(r[])/noiseFactor] <- 0
 

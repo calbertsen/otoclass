@@ -11,5 +11,5 @@ License: GPL-2
 Imports:
     Rcpp (>= 0.11.2)
 Suggests:
-    mvtnorm
+    mvtnorm, raster (>= 2.2-31), reshape2 (>= 1.4)
 LinkingTo: Rcpp

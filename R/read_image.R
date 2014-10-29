@@ -77,12 +77,12 @@ flip_image <- function(dat,datCompare,forceFlip=FALSE){
 read_image<- function(file,noiseFactor = 4, onlyOne = FALSE, minPixelDiff = 20){
     require(raster)
     require(reshape2)
-    r<-raster(file)
+    r<-raster::raster(file)
     r[r[]< max(r[])/noiseFactor] <- 0
 
     if(!onlyOne){
-        rvals <- t(as.matrix(r))
-        mrval <- melt(rvals)
+        rvals <- t(raster::as.matrix(r))
+        mrval <- reshape2::melt(rvals)
 
         mx <- apply(rvals,1,mean)
         #mx[mx<5] <- 0
@@ -112,7 +112,7 @@ read_image<- function(file,noiseFactor = 4, onlyOne = FALSE, minPixelDiff = 20){
     for(i in 1:nclust){
         r3 <- r
         r3[r3>0][km$cluster!=i] <- 0 # 1 sec
-        c<-rasterToContour(r3) # 0.35 sec
+        c<-raster::rasterToContour(r3) # 0.35 sec
         cl <- unlist(lapply(c@lines[[1]]@Lines,function(x)dim(x@coords)[1]))
         res[[i]] <- c@lines[[1]]@Lines[[which.max(cl)]]@coords
     }

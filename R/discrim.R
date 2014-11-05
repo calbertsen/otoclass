@@ -28,17 +28,25 @@ discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "norma
 
     
     if(type == "rrlda"){
-        mn <- sapply(1:nlevels(group),
-                     function(i)apply(train[as.numeric(group)==i,],2,mean))
-        W <- cov(train-t(mn[,group]))
-        B <- cov(apply(t(mn)-apply(train,2,mean),2,function(x)x*prior))
-        ew <- svd(W)
-        W_sqrt <- diag(sqrt(ew$d))%*%t(ew$v)
-        W_msqrt <- solve(W_sqrt)
-        Bstar <- t(W_msqrt)%*%B%*%W_msqrt
-        ebs <- eigen(Bstar)
-        rank <- sum(ebs$values>1e-04)
-        transfmat <- W_msqrt%*%ebs$vectors[,1:nrr]
+        G <-  model.matrix(~group-1)
+        M <- t(sapply(1:nlevels(group),
+                      function(i)apply(train[as.numeric(group)==i,],2,mean)))
+        W <- t(train-G%*%M)%*%(train-G%*%M)/(-diff(dim(G)))
+        ew <- eigen(W)
+        Dsqinv <- diag(sqrt(1/ew$values))
+        trainS <- train%*%ew$vectors%*%Dsqinv
+        MS <- t(sapply(1:nlevels(group),
+                       function(i)apply(trainS[as.numeric(group)==i,],2,mean)))
+        WS <- t(trainS-G%*%MS)%*%(trainS-G%*%MS)/(-diff(dim(G)))
+
+        xbar <- prior%*%t(MS)
+        One <- rep(1,dim(G)[1])
+        Ct <- t(trainS-One%*%xbar)%*%(trainS-One%*%xbar)/(dim(G)[1]-dim(xbar)[2])
+        B <- Ct-WS
+        eb <- eigen(B)
+        rank <- sum(eb$values/sum(eb$values)>1e-03)
+        transfmat <- ew$vectors%*%Dsqinv%*%eb$vectors[,1:min(nrr,rank,nlevels(group)-1)]
+        
         testUse <- test%*%transfmat
         trainUse <- train%*%transfmat
 

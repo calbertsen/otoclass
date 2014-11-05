@@ -46,7 +46,7 @@ discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "norma
         eb <- eigen(B)
         rank <- sum(eb$values/sum(eb$values)>1e-03)
         transfmat <- ew$vectors%*%Dsqinv%*%eb$vectors[,1:min(nrr,rank,nlevels(group)-1)]
-        
+        propExpl <- eb$values/sum(eb$values)[,1:min(nrr,rank,nlevels(group)-1)]
         testUse <- test%*%transfmat
         trainUse <- train%*%transfmat
 
@@ -54,6 +54,7 @@ discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "norma
         transfmat <- diag(1,dim(train)[2])
         testUse <- test
         trainUse <- train
+        propExpl <- NULL
     }
 
     lpi <- log(prior)
@@ -95,6 +96,8 @@ discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "norma
  
     res$tranfmat <- transfmat
     res$sig <- sig
+    res$mn <- mn
+    res$proportionExplained <- propExpl
     return(res)
 }
 

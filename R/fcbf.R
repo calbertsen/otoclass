@@ -23,12 +23,12 @@ SU <- function(x,y,nx=5,ny=5){
     return(2*(Hx-Hxy)/(Hx+Hy))
 }
 
-
-fcbf <- function(train,group,delta,lambda=1){
+#' @export
+fcbf <- function(train,group,delta,lambda=1,nx=5,ny=5){
     # http://www.cs.waikato.ac.nz/ml/publications/1997/Hall-LSmith97.pdf
     # http://pdf.aminer.org/000/335/746/feature_selection_for_high_dimensional_data_a_fast_correlation_based.pdf
     Slist <- numeric(0)
-    vals <- apply(train,2,function(x)SU(x,group))
+    vals <- apply(train,2,function(x)SU(x,group,nx=nx,ny=ny))
     Slist <- order(vals,decreasing=TRUE)
     Slist <- Slist[vals[Slist]>=delta]
     N <- length(Slist)

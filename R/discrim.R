@@ -30,17 +30,25 @@ discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "norma
 
     if(type == "rrlda"){
         G <-  model.matrix(~group-1)
-        M <- t(sapply(1:nlevels(group),
-                      function(i)apply(train[as.numeric(group)==i,],2,mean)))
+        M <- sapply(1:nlevels(group),
+                      function(i)apply(matrix(train[as.numeric(group)==i,],
+                                              ncol=dim(train)[2]),
+                                       2,mean))
+        if(!is.vector(M))
+            M <- t(M)
         W <- t(train-G%*%M)%*%(train-G%*%M)/(-diff(dim(G)))
         ew <- eigen(W)
-        Dsqinv <- diag(sqrt(1/ew$values))
+        Dsqinv <- diag(x=sqrt(1/ew$values),ncol=length(ew$values))
         trainS <- train%*%ew$vectors%*%Dsqinv
-        MS <- t(sapply(1:nlevels(group),
-                       function(i)apply(trainS[as.numeric(group)==i,],2,mean)))
+        MS <- sapply(1:nlevels(group),
+                      function(i)apply(matrix(trainS[as.numeric(group)==i,],
+                                              ncol=dim(trainS)[2]),
+                                       2,mean))
+        if(!is.vector(MS))
+            MS <- t(MS)    
         WS <- t(trainS-G%*%MS)%*%(trainS-G%*%MS)/(-diff(dim(G)))
 
-        xbar <- prior%*%t(MS)
+        xbar <- prior%*%MS
         One <- rep(1,dim(G)[1])
         Ct <- t(trainS-One%*%xbar)%*%(trainS-One%*%xbar)/(dim(G)[1]-dim(xbar)[2])
         B <- Ct-WS

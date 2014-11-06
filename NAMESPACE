@@ -3,6 +3,7 @@
 export(M2prop)
 export(bootstrap_data)
 export(discrim)
+export(fcbf)
 export(knn)
 export(normalize_image)
 export(read_image)

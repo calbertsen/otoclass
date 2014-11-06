@@ -38,8 +38,9 @@ discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "norma
             M <- t(M)
         W <- t(train-G%*%M)%*%(train-G%*%M)/(-diff(dim(G)))
         ew <- eigen(W)
-        Dsqinv <- diag(x=sqrt(1/ew$values),ncol=length(ew$values))
-        trainS <- train%*%ew$vectors%*%Dsqinv
+        rank <- sum(ew$values/sum(ew$values)>1e-03)
+        Dsqinv <- diag(x=sqrt(1/ew$values[1:rank]),ncol=length(ew$values[1:rank]))
+        trainS <- train%*%ew$vectors[,1:rank]%*%Dsqinv
         MS <- sapply(1:nlevels(group),
                       function(i)apply(matrix(trainS[as.numeric(group)==i,],
                                               ncol=dim(trainS)[2]),
@@ -54,7 +55,7 @@ discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "norma
         B <- Ct-WS
         eb <- eigen(B)
         rank <- sum(eb$values/sum(eb$values)>1e-03)
-        transfmat <- ew$vectors%*%Dsqinv%*%eb$vectors[,1:min(nrr,
+        transfmat <- ew$vectors[,1:rank]%*%Dsqinv%*%eb$vectors[,1:min(nrr,
                                                              rank,
                                                              nlevels(group)-1)]
         propExpl <- (eb$values/sum(eb$values))[1:min(nrr,

@@ -26,7 +26,8 @@ which.max.safe <- function(x,grplevel){
 #' @export
 discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "normal", prior = table(group)/length(group), nrr = rank){
 
-    
+    lpi <- log(prior)
+
     if(type == "rrlda"){
         G <-  model.matrix(~group-1)
         M <- t(sapply(1:nlevels(group),
@@ -45,42 +46,61 @@ discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "norma
         B <- Ct-WS
         eb <- eigen(B)
         rank <- sum(eb$values/sum(eb$values)>1e-03)
-        transfmat <- ew$vectors%*%Dsqinv%*%eb$vectors[,1:min(nrr,rank,nlevels(group)-1)]
-        propExpl <- eb$values/sum(eb$values)[,1:min(nrr,rank,nlevels(group)-1)]
+        transfmat <- ew$vectors%*%Dsqinv%*%eb$vectors[,1:min(nrr,
+                                                             rank,
+                                                             nlevels(group)-1)]
+        propExpl <- (eb$values/sum(eb$values))[1:min(nrr,
+                                                     rank,
+                                                     nlevels(group)-1)]
         testUse <- test%*%transfmat
         trainUse <- train%*%transfmat
 
+        mn <- t(M%*%transfmat)
+        sig <- diag(rep(1,dim(mn)[1]))
+        lnorm <- function(i){
+            apply(testUse,1,function(x)mvnorm(as.vector(x),
+                                              mn=as.vector(mn[,i]),
+                                              sig=sig))+lpi[i]
+        }
+        lps <- sapply(1:nlevels(group),lnorm)
     }else{
         transfmat <- diag(1,dim(train)[2])
         testUse <- test
         trainUse <- train
         propExpl <- NULL
-    }
 
-    lpi <- log(prior)
-
+       
  
-    mn <- sapply(1:nlevels(group),
-                 function(i)apply(matrix(trainUse[as.numeric(group)==i,],ncol=dim(trainUse)[2]),2,mean))
+        mn <- sapply(1:nlevels(group),
+                     function(i)apply(matrix(trainUse[as.numeric(group)==i,],
+                                             ncol=dim(trainUse)[2]),
+                                      2,mean))
 
-    mn <- matrix(mn,ncol=nlevels(group))
+        mn <- matrix(mn,ncol=nlevels(group))
     
-    if(type == "qda"){
-        sig <- sapply(1:nlevels(group),
-                      function(i)list(cov(matrix(trainUse[as.numeric(group)==i,]-mn[,i],ncol=dim(trainUse)[2]))))
+        if(type == "qda"){
+            sig <- sapply(1:nlevels(group),
+                          function(i)list(
+                              cov(matrix(trainUse[as.numeric(group)==i,]-mn[,i],
+                                         ncol=dim(trainUse)[2]))))
 
-        lnorm <- function(i){
-            apply(testUse,1,function(x)mvnorm(as.vector(x),mn=as.vector(mn[,i]),sig=sig[[i]]))+lpi[i]
+            lnorm <- function(i){
+                apply(testUse,1,function(x)mvnorm(as.vector(x),
+                                                  mn=as.vector(mn[,i]),
+                                                  sig=sig[[i]]))+lpi[i]
+            }
+
+        }else{
+            sig <- cov(trainUse-t(matrix(mn[,group],nrow=dim(mn)[1])))
+            lnorm <- function(i){
+                apply(testUse,1,function(x)mvnorm(as.vector(x),
+                                                  mn=as.vector(mn[,i]),
+                                              sig=sig))+lpi[i]
+            }
         }
 
-    }else{
-        sig <- cov(trainUse-t(matrix(mn[,group],nrow=dim(mn)[1])))
-        lnorm <- function(i){
-            apply(testUse,1,function(x)mvnorm(as.vector(x),mn=as.vector(mn[,i]),sig=sig))+lpi[i]
-        }
+        lps <- sapply(1:nlevels(group),lnorm)
     }
-
-    lps <- sapply(1:nlevels(group),lnorm)
     prop <- t(apply(lps,1,function(x)exp(x)/sum(exp(x))))
     prop[is.nan(prop)] <- NA
     res <- list()

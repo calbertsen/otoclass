@@ -1,7 +1,8 @@
 #'
 #' @export
 
-efd <- function(dat,t,N,returnAsList=FALSE){
+efd <- function(dat,N,n=nrow(dat),returnAsList=FALSE){
+    t <- seq(0,1,len=n)
     T <- t[length(t)]
     dx <- diff(dat[,1])
     dy <- diff(dat[,2])
@@ -42,8 +43,10 @@ efd <- function(dat,t,N,returnAsList=FALSE){
 
 #' @export
 
-efd2coord <- Vectorize(function(t,a,b,cc,d,T){
+efd2coord <- function(n,a,b,cc,d){
+    t <- seq(0,1,len=n)
+    T <- t[length(t)]
     x <- sum(a*cos(2*1:length(a)*pi*t/T)+b*sin(2*1:length(a)*pi*t/T))
     y <- sum(cc*cos(2*1:length(a)*pi*t/T)+d*sin(2*1:length(a)*pi*t/T))
-    return(c(x,y))
-},"t")
+    return(cbind(x,y))
+}

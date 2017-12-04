@@ -1,5 +1,6 @@
 
-setNumObs_image<- function(dat,t){
+setNumObs_image<- function(dat,n){
+    t <- seq(0,1,len=n)
     tmpX <- approx(x=seq(0,1,len=dim(dat)[1]),y=dat[,1],xout=t)
     tmpY <- approx(x=seq(0,1,len=dim(dat)[1]),y=dat[,2],xout=t)
  
@@ -8,8 +9,8 @@ setNumObs_image<- function(dat,t){
 center_image <- function(dat){
     tmpX <- dat[,1]
     tmpY <- dat[,2]
-    return(cbind(tmpX-mean(tmpX),
-                 tmpY-mean(tmpY))
+    return(cbind(tmpX-mean(range(tmpX)),
+                 tmpY-mean(range(tmpY)))
            )
 }
 scale_image <- function(dat){
@@ -60,8 +61,11 @@ flip_image <- function(dat,datCompare,forceFlip=FALSE){
     dat2 <- dat
     dat2[,2] <- -dat2[,2]
     dat2 <-  newStart_image(dat2)
-    mse1 <- mean((dat1-datCompare)^2)
-    mse2 <- mean((dat2-datCompare)^2)
+    dat1tmp <- setNumObs_image(dat1,1000)
+    dat2tmp <- setNumObs_image(dat2,1000)
+    datComptmp <- setNumObs_image(datCompare,1000)
+    mse1 <- mean((dat1tmp-datComptmp)^2)
+    mse2 <- mean((dat2tmp-datComptmp)^2)
 
     if(forceFlip)
         return(dat2)
@@ -78,6 +82,15 @@ read_image<- function(file,noiseFactor = 4, onlyOne = FALSE, minPixelDiff = 20){
     require(raster)
     require(reshape2)
     r<-raster::raster(file)
+
+    nc <- ncol(r)
+    nr <- nrow(r)
+
+    whiteBorder <- mean(c(r[c(1:(nr*0.02),nr:(nr-nr*0.02)),],r[,c(1:(nc*0.02),nc:(nc-nc*0.02))])) > 255/2
+    if(whiteBorder){
+        r[] <- 255 - r[]
+    }
+    
     r[r[]< max(r[])/noiseFactor] <- 0
 
     if(!onlyOne){
@@ -122,15 +135,16 @@ read_image<- function(file,noiseFactor = 4, onlyOne = FALSE, minPixelDiff = 20){
 }
 
 #' @export
-normalize_image <- function(dat,t,datCompare=NULL,forceFlip=FALSE){
+normalize_image <- function(dat,n,datCompare=NULL,forceFlip=FALSE){
     datNew <- rotate_image(dat)
     datNew <- center_image(datNew)
     datNew <- scale_image(datNew)
     datNew <- newStart_image(datNew)
+    datNew <- setNumObs_image(datNew,n)
     if(!is.null(datCompare)){
-        datNew <- flip_image(datNew,datCompare,forceFlip)
+        dcNorm <- normalize_image(datCompare,n)
+        datNew <- flip_image(datNew,dcNorm,forceFlip)
     }   
-    datNew <- setNumObs_image(datNew,t)
     return(datNew)
 }
 

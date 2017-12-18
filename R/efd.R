@@ -24,6 +24,8 @@ efd <- function(dat,N,n=nrow(dat),returnAsList=FALSE){
     bcalc <- b(1:N)
     ccalc <- cc(1:N)
     dcalc <- d(1:N)
+    a0 <- 1/T * sum(dat[,1]*c(0,dt))
+    c0 <- 1/T * sum(dat[,2]*c(0,dt))
     names(acalc) <- paste0("A",1:N)
     names(bcalc) <- paste0("B",1:N)
     names(ccalc) <- paste0("C",1:N)
@@ -31,7 +33,9 @@ efd <- function(dat,N,n=nrow(dat),returnAsList=FALSE){
     res <- list(A = acalc,
                 B = bcalc,
                 C = ccalc,
-                D = dcalc)
+                D = dcalc,
+                A0 = a0,
+                C0 = c0)
 
     if(returnAsList){
         return(res)
@@ -43,10 +47,10 @@ efd <- function(dat,N,n=nrow(dat),returnAsList=FALSE){
 
 #' @export
 
-efd2coord <- function(n,a,b,cc,d){
-    t <- seq(0,1,len=n)
-    T <- t[length(t)]
-    x <- sum(a*cos(2*1:length(a)*pi*t/T)+b*sin(2*1:length(a)*pi*t/T))
-    y <- sum(cc*cos(2*1:length(a)*pi*t/T)+d*sin(2*1:length(a)*pi*t/T))
+efd2coord <- function(n,A,B,C,D,A0=0,C0=0){
+    tt <- seq(0,1,len=n)
+    T <- tt[length(tt)]
+    x <- A0 + sapply(tt,function(t)sum(A*cos(2*1:length(A)*pi*t/T)+B*sin(2*1:length(A)*pi*t/T)))
+    y <- C0 + sapply(tt,function(t)sum(C*cos(2*1:length(A)*pi*t/T)+D*sin(2*1:length(A)*pi*t/T)))
     return(cbind(x,y))
 }

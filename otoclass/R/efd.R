@@ -1,6 +1,12 @@
-#'
-#' @export
-
+##' Calculate Elliptical Fourier Descriptors
+##'
+##' @param dat 
+##' @param N 
+##' @param n 
+##' @param returnAsList 
+##' @return List of elliptical fourier descriptors
+##' @author Christoffer Moesgaard Albertsen
+##' @export
 efd <- function(dat,N,n=nrow(dat),returnAsList=FALSE){
     t <- seq(0,1,len=n)
     T <- t[length(t)]
@@ -25,7 +31,9 @@ efd <- function(dat,N,n=nrow(dat),returnAsList=FALSE){
     ccalc <- cc(1:N)
     dcalc <- d(1:N)
     a0 <- 1/T * sum(dat[,1]*c(0,dt))
+    names(a0) <- "A0"
     c0 <- 1/T * sum(dat[,2]*c(0,dt))
+    names(c0) <- "C0"
     names(acalc) <- paste0("A",1:N)
     names(bcalc) <- paste0("B",1:N)
     names(ccalc) <- paste0("C",1:N)
@@ -45,8 +53,18 @@ efd <- function(dat,N,n=nrow(dat),returnAsList=FALSE){
     }
 }
 
-#' @export
-
+##' Calculate XY-coordinates from Elliptical Fourier Descriptors
+##'
+##' @param n 
+##' @param A 
+##' @param B 
+##' @param C 
+##' @param D 
+##' @param A0 
+##' @param C0 
+##' @return Matrix of coordinates
+##' @author Christoffer Moesgaard Albertsen
+##' @export
 efd2coord <- function(n,A,B,C,D,A0=0,C0=0){
     tt <- seq(0,1,len=n)
     T <- tt[length(tt)]

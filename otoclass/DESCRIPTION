@@ -1,15 +1,20 @@
 Package: otoclass
 Type: Package
 Title: Otolith Classification and Proportion Estimation
-Version: 0.0.1
-Date: 2014-09-12
+Version: 0.0.2
+Date: 2018-01-04
 Author: Christoffer Moesgaard Albertsen
 Maintainer: Christoffer Moesgaard Albertsen <cmoe@aqua.dtu.dk>
-Description: This packages provides classification methods for analysis of
+Description: Methods for classification and analysis of
     otoliths along with methods for estimating species proportions in samples.
 License: GPL-2
 Imports:
-    Rcpp (>= 0.11.2)
+    Rcpp (>= 0.11.2),
+    TMB,
+    raster,
+    stats,
+    reshape2
 Suggests:
-    mvtnorm, raster (>= 2.2-31), reshape2 (>= 1.4)
+    shiny
 LinkingTo: Rcpp
+RoxygenNote: 6.0.1

@@ -1,6 +1,6 @@
 
+#' @importFrom stats sd
 #' @export
-
 bootstrap_data <- function(covariates,group,nGroup,nGroupTest=nGroup){
 
     ncov <- dim(covariates)[2]
@@ -17,7 +17,7 @@ bootstrap_data <- function(covariates,group,nGroup,nGroupTest=nGroup){
 
     means <-apply(as.matrix(covariates[indx,]),2,mean)
     sds <- apply(as.matrix(covariates[indx,]),2,function(x)diff(range(x)))
-    sds <- apply(as.matrix(covariates[indx,]),2,sd)
+    sds <- apply(as.matrix(covariates[indx,]),2,stats::sd)
 
     train <- as.matrix(covariates[indx,])
     for(i in 1:dim(train)[2]){

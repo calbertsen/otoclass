@@ -21,8 +21,7 @@ which.max.safe <- function(x,grplevel){
 #' @param dist Distribution to use (currently ignored)
 #'
 #' @return stuff
-
-
+#' @importFrom stats cov
 #' @export
 discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "normal", prior = table(group)/length(group), nrr = rank){
 
@@ -30,8 +29,8 @@ discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "norma
     if(type == "rrlda"){
         mn <- sapply(1:nlevels(group),
                      function(i)apply(train[as.numeric(group)==i,],2,mean))
-        W <- cov(train-t(mn[,group]))
-        B <- cov(apply(t(mn)-apply(train,2,mean),2,function(x)x*prior))
+        W <- stats::cov(train-t(mn[,group]))
+        B <- stats::cov(apply(t(mn)-apply(train,2,mean),2,function(x)x*prior))
         ew <- svd(W)
         W_sqrt <- diag(sqrt(ew$d))%*%t(ew$v)
         W_msqrt <- solve(W_sqrt)
@@ -86,6 +85,9 @@ discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "norma
  
     res$tranfmat <- transfmat
     res$sig <- sig
+    colnames(mn) <- levels(group)
+    rownames(mn) <- rownames(sig)
+    res$mn <- mn
     return(res)
 }
 
@@ -99,7 +101,19 @@ discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "norma
 
 
 
-
+##' discrim with TMB
+##'
+##' @param train 
+##' @param group 
+##' @param test 
+##' @param type 
+##' @param verbose 
+##' @param dist 
+##' @param prior 
+##' @return ...
+##' @author Christoffer Moesgaard Albertsen
+##' @importFrom TMB MakeADFun
+##' @importFrom stats nlminb
 discrimTMB <- function(train, group, test,type = "lda", verbose=TRUE, dist = "normal", prior = table(group)/length(group)){
 
     if(!is.factor(group)){
@@ -132,11 +146,8 @@ discrimTMB <- function(train, group, test,type = "lda", verbose=TRUE, dist = "no
 
 
     
-    obj <- MakeADFun(dat,param,map=map,DLL="discrim")
-    obj$env$inner.control$trace <- verbose
-    obj$env$tracemgc <- verbose
-
-    opt <- nlminb(obj$par,obj$fn,obj$gr,obj$he)
+    obj <- TMB::MakeADFun(dat,param,map=map,DLL="discrim",silent=!verbose)
+    opt <- stats::nlminb(obj$par,obj$fn,obj$gr,obj$he)
     
     res <- list()
     class(res) <- "oto_discrim"

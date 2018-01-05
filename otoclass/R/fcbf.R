@@ -23,7 +23,17 @@ SU <- function(x,y,nx=5,ny=5){
     return(2*(Hx-Hxy)/(Hx+Hy))
 }
 
-
+##' Fast Correlation Based Filter for Feature Selection in High-Dimensional Data
+##'
+##' @references http://pdf.aminer.org/000/335/746/feature_selection_for_high_dimensional_data_a_fast_correlation_based.pdf
+##' @param train A matrix of training data
+##' @param group A vector of groups
+##' @param delta 
+##' @param lambda 
+##' @return A vector of selected features
+##' @author Christoffer Moesgaard Albertsen
+##' @importFrom stats na.omit
+##' @export
 fcbf <- function(train,group,delta,lambda=1){
     # http://www.cs.waikato.ac.nz/ml/publications/1997/Hall-LSmith97.pdf
     # http://pdf.aminer.org/000/335/746/feature_selection_for_high_dimensional_data_a_fast_correlation_based.pdf
@@ -38,10 +48,10 @@ fcbf <- function(train,group,delta,lambda=1){
             trainUse <- train[,indxUse]
             if(class(trainUse)=="numeric"){
                 valp <- SU(trainUse,train[,Slist[p]])
-                Slist[indxUse[valp >= lambda*vals[na.omit(Slist[-(1:p)])]]] <- NA
+                Slist[indxUse[valp >= lambda*vals[stats::na.omit(Slist[-(1:p)])]]] <- NA
             }else if(dim(trainUse)[2]>0){
-                valp <- apply(train[,na.omit(Slist[-(1:p)])],2,function(x)SU(x,train[,Slist[p]]))
-                Slist[Slist%in%indxUse[valp >= lambda*vals[na.omit(Slist[-(1:p)])]]] <- NA
+                valp <- apply(train[,stats::na.omit(Slist[-(1:p)])],2,function(x)SU(x,train[,Slist[p]]))
+                Slist[Slist%in%indxUse[valp >= lambda*vals[stats::na.omit(Slist[-(1:p)])]]] <- NA
             }
         }        
     }

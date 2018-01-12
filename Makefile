@@ -23,6 +23,11 @@ install: doc build
 	@echo "Version: ${VERSION}"
 	$(R) CMD INSTALL ${PACKAGE}_${VERSION}.tar.gz
 
+install_dependencies:
+	@echo "\033[0;32mInstalling package dependencies\033[0;0m"
+	@echo "source('https://raw.githubusercontent.com/calbertsen/caMisc/master/R/build_from_github.R'); \
+	installDependencies('${PACKAGE}/DESCRIPTION',dependencies=c(\"Depends\",\"LinkingTo\",\"Imports\",\"Suggests\",\"Enhances\"))" | $(R) -q --slave
+
 test:
 	@echo "\033[0;31mNothing yet\033[0;0m"
 

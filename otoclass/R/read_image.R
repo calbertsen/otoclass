@@ -111,7 +111,7 @@ flip_image <- function(dat,datCompare,forceFlip=FALSE){
 ##' @importFrom stats kmeans relevel
 ##' @importFrom reshape2 melt
 ##' @export
-read_image<- function(file,noiseFactor = 4, onlyOne = FALSE, minPixelDiff = 0.03 * min(nc,nr), extreme = FALSE, assignSinglesByPosition = TRUE){
+read_image<- function(file,noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0.03 * min(nc,nr), extreme = FALSE, assignSinglesByPosition = TRUE){
     r<-raster::raster(file)
     nc <- raster::ncol(r)
     nr <- raster::nrow(r)
@@ -120,8 +120,15 @@ read_image<- function(file,noiseFactor = 4, onlyOne = FALSE, minPixelDiff = 0.03
     if(whiteBorder){
         r[] <- 255 - r[]
     }
-    
+
+    if(is.null(noiseFactor)){
+        hh<-hist(r[],breaks=0:255,plot=FALSE)
+        hd<-hh$density
+        i1 <- which.min(hd[1:length(hd) > which.max(hd)]) + which.max(hd) - 1
+        noiseFactor <- max(r[]) / i1
+        }        
     r[r[]< max(r[])/noiseFactor] <- 0
+    
     if(extreme)
         r[r[] > 0] <- 255
 

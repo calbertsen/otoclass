@@ -124,9 +124,10 @@ read_image<- function(file,noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0
     if(is.null(noiseFactor)){
         hh<-hist(r[],breaks=0:max(r[]),plot=FALSE)
         hd<-hh$density
-        i1 <- which.min(hd[1:length(hd) > which.max(hd)]) + which.max(hd) - 1
+        mv <- 1:(max(r[])/2)
+        i1 <- which.min(hd[1:length(hd) > which.max(hd[mv])]) + which.max(hd[mv]) - 1
         noiseFactor <- max(r[]) / i1
-        }        
+    }        
     r[r[]< max(r[])/noiseFactor] <- 0
     
     if(extreme)
@@ -154,8 +155,6 @@ read_image<- function(file,noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0
                                         #Can perhaps be faster? 0.4 sec
         km <- stats::kmeans(mrval[mrval[,3]>0,1:2],nclust)
         
-
-                                        #The real time problem
     }else{
         km <- list(cluster = rep(1,length(r[r>0])))
         nclust <- 1

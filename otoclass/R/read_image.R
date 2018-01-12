@@ -111,7 +111,7 @@ flip_image <- function(dat,datCompare,forceFlip=FALSE){
 ##' @importFrom stats kmeans relevel
 ##' @importFrom reshape2 melt
 ##' @export
-read_image<- function(file,noiseFactor = 4, onlyOne = FALSE, minPixelDiff = 0.03 * min(nc,nr), extreme = FALSE){
+read_image<- function(file,noiseFactor = 4, onlyOne = FALSE, minPixelDiff = 0.03 * min(nc,nr), extreme = FALSE, assignSinglesByPosition = TRUE){
     r<-raster::raster(file)
     nc <- raster::ncol(r)
     nr <- raster::nrow(r)
@@ -154,7 +154,10 @@ read_image<- function(file,noiseFactor = 4, onlyOne = FALSE, minPixelDiff = 0.03
         nclust <- 1
     }
     km$cluster <- factor(km$cluster)
-    levels(km$cluster) <- c("Right","Left")[(km$centers[,1] < nc/2) + 1]
+    levels(km$cluster) <- c("Left","Right")[order(km$centers[,1])]
+    if(!assignSinglesByPosition & nclust == 1){
+        levels(km$cluster) <- c("Unknown")
+    }
     if(nlevels(km$cluster) > 1)
         km$cluster <- stats::relevel(km$cluster,"Left")
 

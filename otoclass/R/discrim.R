@@ -71,6 +71,8 @@ discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "norma
     }
 
     lps <- sapply(1:nlevels(group),lnorm)
+    if(nrow(testUse) == 1)
+        lps <- matrix(lps,1)
     prop <- t(apply(lps,1,function(x)exp(x)/sum(exp(x))))
     prop[is.nan(prop)] <- NA
     res <- list()
@@ -85,8 +87,12 @@ discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "norma
  
     res$tranfmat <- transfmat
     res$sig <- sig
+    if(type=="qda"){
+        res$sig <- lapply(res$sig,function(x){y <- x;colnames(y) <- rownames(y) <- colnames(train);y})
+        names(res$sig) <- levels(group)
+    }
     colnames(mn) <- levels(group)
-    rownames(mn) <- rownames(sig)
+    rownames(mn) <- colnames(train)
     res$mn <- mn
     return(res)
 }

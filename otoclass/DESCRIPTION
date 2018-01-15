@@ -12,8 +12,7 @@ Imports:
     Rcpp (>= 0.11.2),
     TMB,
     raster,
-    stats,
-    reshape2
+    stats
 Suggests:
     shiny
 LinkingTo: Rcpp

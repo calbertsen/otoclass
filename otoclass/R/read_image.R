@@ -113,7 +113,6 @@ LineLength <- function(v1,v2){
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom raster raster as.matrix rasterToContour ncol nrow
 ##' @importFrom stats kmeans relevel
-##' @importFrom reshape2 melt
 ##' @export
 read_image<- function(file,noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0.03 * min(nc,nr), extreme = FALSE, assignSinglesByPosition = TRUE){
     r<-raster::raster(file)
@@ -145,7 +144,8 @@ read_image<- function(file,noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0
 
     ##rvals <- t(matrix(rv,nrow=nr,ncol=nc,byrow=TRUE))
     if(!onlyOne){
-        mrval <- reshape2::melt(rv)
+        ## reshape2::melt
+        mrval <- cbind(expand.grid(1:nr,1:nc),Val=as.vector(rv))
 
         mx <- apply(rv,1,mean)
         #mx[mx<5] <- 0

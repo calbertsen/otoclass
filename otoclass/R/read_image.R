@@ -99,6 +99,10 @@ flip_image <- function(dat,datCompare,forceFlip=FALSE){
     }
 }
 
+LineLength <- function(v1,v2){
+    sqrt(sum((v1-v2)^2))
+}
+
 ##' Read Otolith Images and Extract Contours
 ##'
 ##' @param file 
@@ -113,36 +117,39 @@ flip_image <- function(dat,datCompare,forceFlip=FALSE){
 ##' @export
 read_image<- function(file,noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0.03 * min(nc,nr), extreme = FALSE, assignSinglesByPosition = TRUE){
     r<-raster::raster(file)
-    nc <- raster::ncol(r)
-    nr <- raster::nrow(r)
+    rv <- t(raster::getValues(r, format = "matrix"))[raster::nrow(r):1,]
+    maxrv <- max(rv)
+    nc <- ncol(rv)
+    nr <- nrow(rv)
 
-    whiteBorder <- mean(c(r[c(1:(nr*0.02),nr:(nr-nr*0.02)),],r[,c(1:(nc*0.02),nc:(nc-nc*0.02))])) > 255/2
+    whiteBorder <- mean(c(rv[c(1:(nr*0.02),nr:(nr-nr*0.02)),],rv[,c(1:(nc*0.02),nc:(nc-nc*0.02))])) > 255/2
     if(whiteBorder){
-        r[] <- 255 - r[]
+        rv <- 255 - rv
     }
 
     if(is.null(noiseFactor)){
-        hh<-hist(r[],breaks=0:max(r[]),plot=FALSE)
+        hh<-hist(rv,breaks=0:maxrv,plot=FALSE)
         hd<-hh$density
-        mv1 <- 1:round(max(r[])/2)
-        mv2 <- (round(max(r[])/2)+1):max(r[])
+        mv1 <- 1:round(maxrv)/2
+        mv2 <- (round(maxrv/2)+1):maxrv
         m1 <- mv1[which.max(hd[mv1])]
         m2 <- mv2[which.max(hd[mv2])]
         i1 <- which.min(hd[m1:m2]) - 1
-        noiseFactor <- max(r[]) / i1
+        noiseFactor <- maxrv / i1
     }        
-    r[r[]< max(r[])/noiseFactor] <- 0
+    rv[rv< maxrv/noiseFactor] <- 0
+    cutVal <- maxrv/noiseFactor
     
     if(extreme)
-        r[r[] > 0] <- 255
+        rv[rv > 0] <- 255
 
+    ##rvals <- t(matrix(rv,nrow=nr,ncol=nc,byrow=TRUE))
     if(!onlyOne){
-        rvals <- t(raster::as.matrix(r))
-        mrval <- reshape2::melt(rvals)
+        mrval <- reshape2::melt(rv)
 
-        mx <- apply(rvals,1,mean)
+        mx <- apply(rv,1,mean)
         #mx[mx<5] <- 0
-        my <- apply(rvals,2,mean)
+        my <- apply(rv,2,mean)
         #my[my<5] <- 0
         difx <- which(diff(which(mx==0))>minPixelDiff)
         dify <- which(diff(which(my==0))>minPixelDiff)
@@ -154,12 +161,10 @@ read_image<- function(file,noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0
         }else{
             nclust <- 1
         }
-
-                                        #Can perhaps be faster? 0.4 sec
         km <- stats::kmeans(mrval[mrval[,3]>0,1:2],nclust)
         
     }else{
-        km <- list(cluster = rep(1,length(r[r>0])))
+        km <- list(cluster = rep(1,length(rv[rv>0])))
         nclust <- 1
     }
     km$cluster <- factor(km$cluster)
@@ -172,15 +177,19 @@ read_image<- function(file,noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0
 
     res <- list()
     for(i in 1:nlevels(km$cluster)){
-        r3 <- r
-        r3[r3>0][as.integer(km$cluster) != i] <- 0 # 1 sec
+        rv3 <- rv
+        rv3[rv3>0][as.integer(km$cluster) != i] <- 0
         if(extreme){
-            cc <- Conte(raster::as.matrix(r3))
+            cc <- Conte((rv3))
             cont <- cbind(cc$X,cc$Y)
         }else{
-            cc<-raster::rasterToContour(r3) # 0.35 sec
-            cl <- unlist(lapply(cc@lines[[1]]@Lines,function(x)dim(x@coords)[1]))
-            cont <- cc@lines[[1]]@Lines[[which.max(cl)]]@coords
+            cc<-contourLines(1:nc,1:nr,rv3,levels=cutVal)
+            ## cl <- unlist(lapply(cc,function(x)sum(sapply(2:length(x$x),
+            ##                                           function(i)LineLength(c(x$x[i],x$y[i]),
+            ##                                                                 c(x$x[i-1],x$y[i-1]))))
+            ##                     ))
+            cl <- unlist(lapply(cc,function(x)length(x$x)))
+            cont <- do.call("cbind",cc[[which.max(cl)]][c("x","y")])
         }
         res[[i]] <- cont
         attr(res[[i]],"Position") <- levels(km$cluster)[i]

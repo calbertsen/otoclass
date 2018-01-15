@@ -117,7 +117,7 @@ LineLength <- function(v1,v2){
 ##' @export
 read_image<- function(file,noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0.03 * min(nc,nr), extreme = FALSE, assignSinglesByPosition = TRUE){
     r<-raster::raster(file)
-    rv <- t(raster::getValues(r, format = "matrix"))[raster::nrow(r):1,]
+    rv <- t(raster::getValues(r, format = "matrix")[raster::nrow(r):1,])
     maxrv <- max(rv)
     nc <- ncol(rv)
     nr <- nrow(rv)
@@ -183,12 +183,12 @@ read_image<- function(file,noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0
             cc <- Conte((rv3))
             cont <- cbind(cc$X,cc$Y)
         }else{
-            cc<-contourLines(1:nc,1:nr,rv3,levels=cutVal)
-            ## cl <- unlist(lapply(cc,function(x)sum(sapply(2:length(x$x),
-            ##                                           function(i)LineLength(c(x$x[i],x$y[i]),
-            ##                                                                 c(x$x[i-1],x$y[i-1]))))
-            ##                     ))
-            cl <- unlist(lapply(cc,function(x)length(x$x)))
+            cc<-contourLines(1:nr,1:nc,rv3,levels=cutVal)
+            cl <- unlist(lapply(cc,function(x)sum(sapply(2:length(x$x),
+                                                      function(i)LineLength(c(x$x[i],x$y[i]),
+                                                                            c(x$x[i-1],x$y[i-1]))))
+                                ))
+            ## cl <- unlist(lapply(cc,function(x)length(x$x)))
             cont <- do.call("cbind",cc[[which.max(cl)]][c("x","y")])
         }
         res[[i]] <- cont

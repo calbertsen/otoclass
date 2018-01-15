@@ -102,6 +102,33 @@ flip_image <- function(dat,datCompare,forceFlip=FALSE){
 LineLength <- function(v1,v2){
     sqrt(sum((v1-v2)^2))
 }
+##' Get a pixel matrix from an image file
+##'
+##' @param file Path to image file
+##' @param grey Should output be greyscale?
+##' @return A matrix of pixel values (0-255)
+##' @author Christoffer Moesgaard Albertsen
+##' @importFrom jpeg readJPEG
+##' @importFrom png readPNG
+##' @importFrom tiff readTIFF
+getPixelMatrix <- function(file, grey=TRUE){
+    if(grepl("\\.jp(e)*g$",file,ignore.case=TRUE)){
+        im <- jpeg::readJPEG(file)
+    }else if(grepl("\\.png$",file,ignore.case=TRUE)){
+        im <- png::readPNG(file)
+    }else if(grepl("\\.tif(f)*$",file,ignore.case=TRUE)){
+        im <- tiff::readTIFF(file)
+    }else{
+        stop(sprintf("Unsupported file format: %s. Only JPEG, PNG, and TIFF are supported.",tail(strsplit(file,".")[[1]],1)))
+    }
+    if(grey & length(dim(im)) == 3){
+        if(dim(im)[3] >= 3)
+            imOut <- (0.2989 * im[,,1] + 0.5870 * im[,,2] + 0.1140 * im[,,3]) * 255
+    }else{
+        imOut <- im * 255
+    }
+    return(imOut)
+}
 
 ##' Read Otolith Images and Extract Contours
 ##'
@@ -111,12 +138,11 @@ LineLength <- function(v1,v2){
 ##' @param minPixelDiff 
 ##' @return otolith image information
 ##' @author Christoffer Moesgaard Albertsen
-##' @importFrom raster raster as.matrix rasterToContour ncol nrow
 ##' @importFrom stats kmeans relevel
 ##' @export
 read_image<- function(file,noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0.03 * min(nc,nr), extreme = FALSE, assignSinglesByPosition = TRUE){
-    r<-raster::raster(file)
-    rv <- t(raster::getValues(r, format = "matrix")[raster::nrow(r):1,])
+    r<-getPixelMatrix(file)
+    rv <- t(r[nrow(r):1,])
     maxrv <- max(rv)
     nc <- ncol(rv)
     nr <- nrow(rv)

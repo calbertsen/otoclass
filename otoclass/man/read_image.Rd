@@ -4,8 +4,8 @@
 \alias{read_image}
 \title{Read Otolith Images and Extract Contours}
 \usage{
-read_image(file, noiseFactor = 4, onlyOne = FALSE, minPixelDiff = 0.03 *
-  min(nc, nr), extreme = FALSE, assignSinglesByPosition = TRUE)
+read_image(file, noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0.03
+  * min(nc, nr), extreme = FALSE, assignSinglesByPosition = TRUE)
 }
 \arguments{
 \item{file}{}

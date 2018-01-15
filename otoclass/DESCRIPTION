@@ -11,8 +11,10 @@ License: GPL-2
 Imports:
     Rcpp (>= 0.11.2),
     TMB,
-    raster,
-    stats
+    stats,
+    jpeg,
+    png,
+    tiff
 Suggests:
     shiny
 LinkingTo: Rcpp

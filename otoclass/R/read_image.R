@@ -136,11 +136,14 @@ getPixelMatrix <- function(file, grey=TRUE){
 ##' @param noiseFactor 
 ##' @param onlyOne 
 ##' @param minPixelDiff 
+##' @param extreme 
+##' @param pixelwise 
+##' @param assignSinglesByPosition 
 ##' @return otolith image information
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stats kmeans relevel
 ##' @export
-read_image<- function(file,noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0.03 * min(nc,nr), extreme = FALSE, assignSinglesByPosition = TRUE){
+read_image<- function(file,noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0.05 * min(nc,nr), extreme = TRUE, pixelwise = FALSE, assignSinglesByPosition = TRUE){
     r<-getPixelMatrix(file)
     rv <- t(r[nrow(r):1,])
     maxrv <- max(rv)
@@ -205,11 +208,11 @@ read_image<- function(file,noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0
     for(i in 1:nlevels(km$cluster)){
         rv3 <- rv
         rv3[rv3>0][as.integer(km$cluster) != i] <- 0
-        if(extreme){
+        if(pixelwise){
             cc <- Conte((rv3))
             cont <- cbind(cc$X,cc$Y)
         }else{
-            cc<-contourLines(1:nr,1:nc,rv3,levels=cutVal)
+            cc<-contourLines(1:nr,1:nc,rv3,levels=ifelse(extreme,255,cutVal))
             cl <- unlist(lapply(cc,function(x)sum(sapply(2:length(x$x),
                                                       function(i)LineLength(c(x$x[i],x$y[i]),
                                                                             c(x$x[i-1],x$y[i-1]))))

@@ -4,10 +4,11 @@
 ##' @param N 
 ##' @param n 
 ##' @param returnAsList 
+##' @param normalize Normalize using method from Ferson et al. 1985?
 ##' @return List of elliptical fourier descriptors
 ##' @author Christoffer Moesgaard Albertsen
 ##' @export
-efd <- function(dat,N,n=nrow(dat),returnAsList=FALSE){
+efd <- function(dat,N,n=nrow(dat),returnAsList=FALSE, normalize = FALSE){
     t <- seq(0,1,len=n)
     T <- t[length(t)]
     dx <- diff(dat[,1])
@@ -34,6 +35,23 @@ efd <- function(dat,N,n=nrow(dat),returnAsList=FALSE){
     names(a0) <- "A0"
     c0 <- 1/T * sum(dat[,2]*c(0,dt))
     names(c0) <- "C0"
+
+    if(normalize){
+        theta <- (0.5 * atan((2 * (acalc[1] * bcalc[1] + ccalc[1] * dcalc[1] )) /
+                          (acalc[1]^2 + bcalc[1]^2 + ccalc[1]^2 + dcalc[1]^2))) %% pi
+        as <- acalc[1] * cos(theta) + bcalc[1] * sin(theta)
+        cs <- ccalc[1] * cos(theta) + dcalc[1] * sin(theta)
+        scale <-  1 / sqrt(as^2 + cs^2)
+        phi <- atan(as / cs) %% pi
+        T1 <- matrix(c(cos(phi),-sin(phi),sin(phi),cos(phi)),2,2)
+        T2 <- function(n) matrix(c(cos(n * theta),-sin(n * theta),sin(n * theta),cos(n * theta)),2,2)
+        nefd <- do.call("rbind",sapply(1:N, function(i){ as.vector(t(scale * T1 %*% matrix(c(acalc[i],ccalc[i],bcalc[i],dcalc[i]),2,2) %*% T2(i)))},simplify = FALSE))
+        acalc <- nefd[,1]
+        bcalc <- nefd[,2]
+        ccalc <- nefd[,3]
+        dcalc <- nefd[,4]
+    }
+    
     names(acalc) <- paste0("A",1:N)
     names(bcalc) <- paste0("B",1:N)
     names(ccalc) <- paste0("C",1:N)

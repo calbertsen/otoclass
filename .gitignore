@@ -1,0 +1,6 @@
+*.Rcheck
+*.tar.gz
+otoclass/libs/
+otoclass/src/*.so
+otoclass/src/*.o
+.Rhistory

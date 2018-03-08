@@ -21,46 +21,56 @@ which.max.safe <- function(x,grplevel){
 #' @param dist Distribution to use (currently ignored)
 #'
 #' @return stuff
-
-
+#' @importFrom stats cov
 #' @export
 discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "normal", prior = table(group)/length(group), nrr = rank){
 
     lpi <- log(prior)
 
     if(type == "rrlda"){
-        G <-  model.matrix(~group-1)
-        M <- sapply(1:nlevels(group),
-                      function(i)apply(matrix(train[as.numeric(group)==i,],
-                                              ncol=dim(train)[2]),
-                                       2,mean))
-        if(!is.vector(M))
-            M <- t(M)
-        W <- t(train-G%*%M)%*%(train-G%*%M)/(-diff(dim(G)))
-        ew <- eigen(W)
-        rankw <- sum(ew$values>1e-04)
-        Dsqinv <- diag(x=sqrt(1/ew$values[1:rankw]),ncol=length(ew$values[1:rankw]))
-        trainS <- train%*%ew$vectors[,1:rankw]%*%Dsqinv
-        MS <- sapply(1:nlevels(group),
-                      function(i)apply(matrix(trainS[as.numeric(group)==i,],
-                                              ncol=dim(trainS)[2]),
-                                       2,mean))
-        if(!is.vector(MS))
-            MS <- t(MS)    
-        WS <- t(trainS-G%*%MS)%*%(trainS-G%*%MS)/(-diff(dim(G)))
+        ## G <-  model.matrix(~group-1)
+        ## M <- sapply(1:nlevels(group),
+        ##               function(i)apply(matrix(train[as.numeric(group)==i,],
+        ##                                       ncol=dim(train)[2]),
+        ##                                2,mean))
+        ## if(!is.vector(M))
+        ##     M <- t(M)
+        ## W <- t(train-G%*%M)%*%(train-G%*%M)/(-diff(dim(G)))
+        ## ew <- eigen(W)
+        ## rankw <- sum(ew$values>1e-04)
+        ## Dsqinv <- diag(x=sqrt(1/ew$values[1:rankw]),ncol=length(ew$values[1:rankw]))
+        ## trainS <- train%*%ew$vectors[,1:rankw]%*%Dsqinv
+        ## MS <- sapply(1:nlevels(group),
+        ##               function(i)apply(matrix(trainS[as.numeric(group)==i,],
+        ##                                       ncol=dim(trainS)[2]),
+        ##                                2,mean))
+        ## if(!is.vector(MS))
+        ##     MS <- t(MS)    
+        ## WS <- t(trainS-G%*%MS)%*%(trainS-G%*%MS)/(-diff(dim(G)))
 
-        xbar <- prior%*%MS
-        One <- rep(1,dim(G)[1])
-        Ct <- t(trainS-One%*%xbar)%*%(trainS-One%*%xbar)/(dim(G)[1]-dim(xbar)[2])
-        B <- Ct-WS
-        eb <- eigen(B)
-        rank <- sum(eb$values>1e-04)
-        transfmat <- ew$vectors[,1:rankw]%*%Dsqinv%*%eb$vectors[,1:min(nrr,
-                                                             rank,
-                                                             nlevels(group)-1)]
-        propExpl <- (eb$values/sum(eb$values))[1:min(nrr,
-                                                     rank,
-                                                     nlevels(group)-1)]
+        ## xbar <- prior%*%MS
+        ## One <- rep(1,dim(G)[1])
+        ## Ct <- t(trainS-One%*%xbar)%*%(trainS-One%*%xbar)/(dim(G)[1]-dim(xbar)[2])
+        ## B <- Ct-WS
+        ## eb <- eigen(B)
+        ## rank <- sum(eb$values>1e-04)
+        ## transfmat <- ew$vectors[,1:rankw]%*%Dsqinv%*%eb$vectors[,1:min(nrr,
+        ##                                                      rank,
+        ##                                                      nlevels(group)-1)]
+        ## propExpl <- (eb$values/sum(eb$values))[1:min(nrr,
+        ##                                              rank,
+        ##                                              nlevels(group)-1)]
+        mn <- sapply(1:nlevels(group),
+                     function(i)apply(train[as.numeric(group)==i,],2,mean))
+        W <- stats::cov(train-t(mn[,group]))
+        B <- stats::cov(apply(t(mn)-apply(train,2,mean),2,function(x)x*prior))
+        ew <- svd(W)
+        W_sqrt <- diag(sqrt(ew$d))%*%t(ew$v)
+        W_msqrt <- solve(W_sqrt)
+        Bstar <- t(W_msqrt)%*%B%*%W_msqrt
+        ebs <- eigen(Bstar)
+        rank <- sum(ebs$values>1e-04)
+        transfmat <- W_msqrt%*%ebs$vectors[,1:nrr]
         testUse <- test%*%transfmat
         trainUse <- train%*%transfmat
 
@@ -110,6 +120,10 @@ discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "norma
 
         lps <- sapply(1:nlevels(group),lnorm)
     }
+
+    lps <- sapply(1:nlevels(group),lnorm)
+    if(nrow(testUse) == 1)
+        lps <- matrix(lps,1)
     prop <- t(apply(lps,1,function(x)exp(x)/sum(exp(x))))
     prop[is.nan(prop)] <- NA
     res <- list()
@@ -125,8 +139,14 @@ discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "norma
  
     res$tranfmat <- transfmat
     res$sig <- sig
+    ## res$proportionExplained <- propExpl
+    if(type=="qda"){
+        res$sig <- lapply(res$sig,function(x){y <- x;colnames(y) <- rownames(y) <- colnames(train);y})
+        names(res$sig) <- levels(group)
+    }
+    colnames(mn) <- levels(group)
+    rownames(mn) <- colnames(train)
     res$mn <- mn
-    res$proportionExplained <- propExpl
     return(res)
 }
 
@@ -140,7 +160,19 @@ discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "norma
 
 
 
-
+##' discrim with TMB
+##'
+##' @param train 
+##' @param group 
+##' @param test 
+##' @param type 
+##' @param verbose 
+##' @param dist 
+##' @param prior 
+##' @return ...
+##' @author Christoffer Moesgaard Albertsen
+##' @importFrom TMB MakeADFun
+##' @importFrom stats nlminb
 discrimTMB <- function(train, group, test,type = "lda", verbose=TRUE, dist = "normal", prior = table(group)/length(group)){
 
     if(!is.factor(group)){
@@ -173,11 +205,8 @@ discrimTMB <- function(train, group, test,type = "lda", verbose=TRUE, dist = "no
 
 
     
-    obj <- MakeADFun(dat,param,map=map,DLL="discrim")
-    obj$env$inner.control$trace <- verbose
-    obj$env$tracemgc <- verbose
-
-    opt <- nlminb(obj$par,obj$fn,obj$gr,obj$he)
+    obj <- TMB::MakeADFun(dat,param,map=map,DLL="discrim",silent=!verbose)
+    opt <- stats::nlminb(obj$par,obj$fn,obj$gr,obj$he)
     
     res <- list()
     class(res) <- "oto_discrim"

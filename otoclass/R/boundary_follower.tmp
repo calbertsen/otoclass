@@ -1,0 +1,44 @@
+
+
+R <- function(th) matrix(c(cos(th+pi/2),-sin(th+pi/2),sin(th+pi/2),cos(th+pi/2)),2,2)
+
+
+
+boundary_follower <- function(x){
+    T <- list()
+    dLeft <- c(-1,0)
+    dRight <- c(1,0)
+    dFront <- c(0,1)
+    dRear <- c(0,-1)
+    d <- 0
+    i <- 1
+
+    P <- which
+
+    T(P, d) ← S(P, d), where P is on black
+    do
+        if PLeft = black then
+           // Case 4a: Left neighbor
+           T(P, d) ← T(PLeft, dLeft)
+        else
+           if PLeft−Rear = black and PRear = white then
+               // Case 4b: Inner-outer corner at left-rear
+               T(P, d) ← T(PLeft−Rear, dRear)
+           else
+               if PFront−Left = black then
+                   if PFront = black then
+                       // Case 4d: Inner corer at front
+                       T(P, d) ← T(PFront, d)
+                       T(P, d) ← T(PLeft, d)
+                   else
+                       // Case 4c: Inner-outer corner at front-left
+                       T(P, d) ← T(PFront−Left, d)
+               else if PFront = black then
+                   // Case 4e: Front neighbor
+                   T(P, d) ← T(PFront, dRight)
+               else
+                   // Case 4f: Outer corner
+                   T(P, d) ← T(P, dRear)
+    while T(P, d) ≠ S(P, d)
+
+}

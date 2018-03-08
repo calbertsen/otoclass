@@ -1,0 +1,36 @@
+language: r
+
+sudo: required
+
+r:
+  - oldrel
+  - release
+  - devel
+
+os:
+  - linux
+  - osx
+
+env:
+  global:
+    - OS=$(uname -s)
+
+matrix:
+  exclude:
+  - os: osx
+
+install:
+  - R -e 'install.packages(c("roxygen2"),dependencies = c("Depends", "Imports", "LinkingTo", "Enhances"))'
+  - make install_dependencies 
+
+script:
+  - make check
+  - make test
+
+after_success:
+  - cat otoclass.Rcheck/00check.log
+  - cat otoclass.Rcheck/00install.out
+
+after_failure:
+  - cat otoclass.Rcheck/00check.log
+  - cat otoclass.Rcheck/00install.out

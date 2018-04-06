@@ -158,7 +158,7 @@ read_image<- function(file,noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0
     if(is.null(noiseFactor)){
         hh<-hist(rv,breaks=0:maxrv,plot=FALSE)
         hd<-hh$density
-        mv1 <- 1:round(maxrv)/2
+        mv1 <- 1:(round(maxrv)/2)
         mv2 <- (round(maxrv/2)+1):maxrv
         m1 <- mv1[which.max(hd[mv1])]
         m2 <- mv2[which.max(hd[mv2])]

@@ -42,9 +42,9 @@ efd <- function(dat,N,n=nrow(dat),returnAsList=FALSE, normalize = FALSE){
         as <- acalc[1] * cos(theta) + bcalc[1] * sin(theta)
         cs <- ccalc[1] * cos(theta) + dcalc[1] * sin(theta)
         scale <-  1 / sqrt(as^2 + cs^2)
-        phi <- atan(as / cs) %% pi
+        phi <- atan(sqrt(as) / sqrt(cs)) %% pi
         T1 <- matrix(c(cos(phi),-sin(phi),sin(phi),cos(phi)),2,2)
-        T2 <- function(n) matrix(c(cos(n * theta),-sin(n * theta),sin(n * theta),cos(n * theta)),2,2)
+        T2 <- function(n) matrix(c(cos(n * theta),sin(n * theta),-sin(n * theta),cos(n * theta)),2,2)
         nefd <- do.call("rbind",sapply(1:N, function(i){ as.vector(t(scale * T1 %*% matrix(c(acalc[i],ccalc[i],bcalc[i],dcalc[i]),2,2) %*% T2(i)))},simplify = FALSE))
         acalc <- nefd[,1]
         bcalc <- nefd[,2]

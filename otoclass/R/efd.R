@@ -9,22 +9,22 @@
 ##' @author Christoffer Moesgaard Albertsen
 ##' @export
 efd <- function(dat,N,n=nrow(dat),returnAsList=FALSE, normalize = FALSE){
-    t <- seq(0,1,len=n)
-    T <- t[length(t)]
+    tt <- seq(0,1,len=n)
+    T <- tt[length(tt)]
     dx <- diff(dat[,1])
     dy <- diff(dat[,2])
-    dt <- diff(t)
+    dt <- diff(tt)
     a <- Vectorize(function(n){
-        T/(2*n^2*pi^2)*sum(dx/dt*(cos(2*n*pi*t[-1]/T)-cos(2*n*pi*t[-length(t)]/T)))
+        T/(2*n^2*pi^2)*sum(dx/dt*(cos(2*n*pi*tt[-1]/T)-cos(2*n*pi*tt[-length(tt)]/T)))
     })
     b <-  Vectorize(function(n){
-        T/(2*n^2*pi^2)*sum(dx/dt*(sin(2*n*pi*t[-1]/T)-sin(2*n*pi*t[-length(t)]/T)))
+        T/(2*n^2*pi^2)*sum(dx/dt*(sin(2*n*pi*tt[-1]/T)-sin(2*n*pi*tt[-length(tt)]/T)))
     })
     cc <- Vectorize(function(n){
-        T/(2*n^2*pi^2)*sum(dy/dt*(cos(2*n*pi*t[-1]/T)-cos(2*n*pi*t[-length(t)]/T)))
+        T/(2*n^2*pi^2)*sum(dy/dt*(cos(2*n*pi*tt[-1]/T)-cos(2*n*pi*tt[-length(tt)]/T)))
     })
     d <- Vectorize(function(n){
-        T/(2*n^2*pi^2)*sum(dy/dt*(sin(2*n*pi*t[-1]/T)-sin(2*n*pi*t[-length(t)]/T)))
+        T/(2*n^2*pi^2)*sum(dy/dt*(sin(2*n*pi*tt[-1]/T)-sin(2*n*pi*tt[-length(tt)]/T)))
     })
 
     acalc <- a(1:N)
@@ -37,12 +37,12 @@ efd <- function(dat,N,n=nrow(dat),returnAsList=FALSE, normalize = FALSE){
     names(c0) <- "C0"
 
     if(normalize){
-        theta <- (0.5 * atan((2 * (acalc[1] * bcalc[1] + ccalc[1] * dcalc[1] )) /
-                          (acalc[1]^2 + bcalc[1]^2 + ccalc[1]^2 + dcalc[1]^2))) %% pi
+        theta <- (0.5 * atan( 2 * ( acalc[1] * bcalc[1] + ccalc[1] * dcalc[1] ) /
+                          (acalc[1]^2 - bcalc[1]^2 + ccalc[1]^2 - dcalc[1]^2)))
         as <- acalc[1] * cos(theta) + bcalc[1] * sin(theta)
         cs <- ccalc[1] * cos(theta) + dcalc[1] * sin(theta)
         scale <-  1 / sqrt(as^2 + cs^2)
-        phi <- atan(sqrt(as) / sqrt(cs)) %% pi
+        phi <- atan(cs / as)
         T1 <- matrix(c(cos(phi),-sin(phi),sin(phi),cos(phi)),2,2)
         T2 <- function(n) matrix(c(cos(n * theta),sin(n * theta),-sin(n * theta),cos(n * theta)),2,2)
         nefd <- do.call("rbind",sapply(1:N, function(i){ as.vector(t(scale * T1 %*% matrix(c(acalc[i],ccalc[i],bcalc[i],dcalc[i]),2,2) %*% T2(i)))},simplify = FALSE))

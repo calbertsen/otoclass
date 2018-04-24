@@ -4,7 +4,7 @@
 \alias{efd}
 \title{Calculate Elliptical Fourier Descriptors}
 \usage{
-efd(dat, N, n = nrow(dat), returnAsList = FALSE)
+efd(dat, N, n = nrow(dat), returnAsList = FALSE, normalize = FALSE)
 }
 \arguments{
 \item{dat}{}
@@ -14,12 +14,18 @@ efd(dat, N, n = nrow(dat), returnAsList = FALSE)
 \item{n}{}
 
 \item{returnAsList}{}
+
+\item{normalize}{Normalize using method from Ferson et al. 1985?}
 }
 \value{
 List of elliptical fourier descriptors
 }
 \description{
 Calculate Elliptical Fourier Descriptors
+}
+\references{
+Kuhl, F. P., Giardina, C. R. (1981) Elliptic Fourier Features of a Closed Contour. Computer Graphics and Image Processing. 18:236-258
+Ferson, S., Rohlf, F. J., Koehn, R. K. (1985) Measuring Shape Variation of Two-Dimensional Outlines. Systematic Zoology. 34(1):59-68
 }
 \author{
 Christoffer Moesgaard Albertsen

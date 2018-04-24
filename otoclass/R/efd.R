@@ -7,6 +7,8 @@
 ##' @param normalize Normalize using method from Ferson et al. 1985?
 ##' @return List of elliptical fourier descriptors
 ##' @author Christoffer Moesgaard Albertsen
+##' @references Kuhl, F. P., Giardina, C. R. (1981) Elliptic Fourier Features of a Closed Contour. Computer Graphics and Image Processing. 18:236-258
+##' Ferson, S., Rohlf, F. J., Koehn, R. K. (1985) Measuring Shape Variation of Two-Dimensional Outlines. Systematic Zoology. 34(1):59-68
 ##' @export
 efd <- function(dat,N,n=nrow(dat),returnAsList=FALSE, normalize = FALSE){
     tt <- seq(0,1,len=n)
@@ -37,12 +39,12 @@ efd <- function(dat,N,n=nrow(dat),returnAsList=FALSE, normalize = FALSE){
     names(c0) <- "C0"
 
     if(normalize){
-        theta <- (0.5 * atan( 2 * ( acalc[1] * bcalc[1] + ccalc[1] * dcalc[1] ) /
-                          (acalc[1]^2 - bcalc[1]^2 + ccalc[1]^2 - dcalc[1]^2)))
+        theta <- (0.5 * atan2( 2 * ( acalc[1] * bcalc[1] + ccalc[1] * dcalc[1] ),
+        (acalc[1]^2 - bcalc[1]^2 + ccalc[1]^2 - dcalc[1]^2)))
         as <- acalc[1] * cos(theta) + bcalc[1] * sin(theta)
         cs <- ccalc[1] * cos(theta) + dcalc[1] * sin(theta)
         scale <-  1 / sqrt(as^2 + cs^2)
-        phi <- atan(cs / as)
+        phi <- atan2(cs, as)
         T1 <- matrix(c(cos(phi),-sin(phi),sin(phi),cos(phi)),2,2)
         T2 <- function(n) matrix(c(cos(n * theta),sin(n * theta),-sin(n * theta),cos(n * theta)),2,2)
         nefd <- do.call("rbind",sapply(1:N, function(i){ as.vector(t(scale * T1 %*% matrix(c(acalc[i],ccalc[i],bcalc[i],dcalc[i]),2,2) %*% T2(i)))},simplify = FALSE))

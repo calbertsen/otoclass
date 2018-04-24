@@ -220,7 +220,7 @@ read_image<- function(file,noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0
             ## cl <- unlist(lapply(cc,function(x)length(x$x)))
             cont <- do.call("cbind",cc[[which.max(cl)]][c("x","y")])
         }
-        res[[i]] <- cont
+        res[[i]] <- newStart_image(cont)
         attr(res[[i]],"Position") <- levels(km$cluster)[i]
         attr(res[[i]],"File") <- file
         attr(res[[i]],"NoiseFactor") <- noiseFactor

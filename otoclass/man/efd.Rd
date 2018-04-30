@@ -7,13 +7,13 @@
 efd(dat, N, n = nrow(dat), returnAsList = FALSE, normalize = FALSE)
 }
 \arguments{
-\item{dat}{}
+\item{dat}{contour_image object}
 
-\item{N}{}
+\item{N}{Number of harmonics to calculate}
 
-\item{n}{}
+\item{n}{Number of data points in dat}
 
-\item{returnAsList}{}
+\item{returnAsList}{Should result be returned as a list that can be passed to \code{efd2coord}?}
 
 \item{normalize}{Normalize using method from Ferson et al. 1985?}
 }
@@ -22,6 +22,21 @@ List of elliptical fourier descriptors
 }
 \description{
 Calculate Elliptical Fourier Descriptors
+}
+\examples{
+Ellipsis <- function(theta,r1=1,r2=2){
+  xx <- seq(0,2*pi,len=100)
+  X <- cbind(r1*cos(xx),r2*sin(xx))
+  R <- matrix(c(cos(theta),sin(theta),-sin(theta),cos(theta)),2,2)
+  Y <- t(apply(X,1,function(x) as.vector(R \%*\% x)))
+  return(Y)
+}
+efd(Ellipsis(pi/2),1)
+
+efd(Ellipsis(pi/2),1,normalize = TRUE)
+
+efd(Ellipsis(-pi/2),1,normalize = TRUE)
+
 }
 \references{
 Kuhl, F. P., Giardina, C. R. (1981) Elliptic Fourier Features of a Closed Contour. Computer Graphics and Image Processing. 18:236-258

@@ -1,5 +1,5 @@
-##' From Morphometrics with R
-##' Modified to start at right most non-zero pixel
+## From Morphometrics with R
+## Modified to start at right most non-zero pixel
 Conte<-function(imagematrix){
     indx <- which(imagematrix > 0,arr.ind=TRUE)
     x <- indx[which.max(indx[,1])[1],]

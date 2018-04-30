@@ -15,6 +15,10 @@ assign_unknown(nimList, N = 60, delta = 0.01, lambda = 1,
 \item{delta}{passed to fcbf for feature selection}
 
 \item{lambda}{passed to fcbf for feature selection}
+
+\item{link}{Link function passed to \code{stats::glm}}
+
+\item{normalize_efd}{Should EFDs be normalized?}
 }
 \value{
 A list of normalized contours where 'Unknown' Position attributes are replaced by 'Left' or 'Right'.

@@ -9,19 +9,19 @@ read_image(file, noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0.05
   assignSinglesByPosition = TRUE)
 }
 \arguments{
-\item{file}{}
+\item{file}{Image file path}
 
-\item{noiseFactor}{}
+\item{noiseFactor}{Scalar value determining cutoff value for background noise on image. If NULL, a value is calculated automatically.}
 
-\item{onlyOne}{}
+\item{onlyOne}{Boolean value. Is there only one otolith on the image?}
 
-\item{minPixelDiff}{}
+\item{minPixelDiff}{Minimum pixel difference between otoliths}
 
-\item{extreme}{}
+\item{extreme}{Boolean value. Should pixel values be converted to 0/1?}
 
-\item{pixelwise}{}
+\item{pixelwise}{Boolean value. If TRUE, a pixel-wise algorithm is used to extract contours; otherwise, \code{grDevices::contourLines} is used.}
 
-\item{assignSinglesByPosition}{}
+\item{assignSinglesByPosition}{Should single otoliths be assigned to Left/Right based on position on image?}
 }
 \value{
 otolith image information

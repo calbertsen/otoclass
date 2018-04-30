@@ -11,9 +11,9 @@ fcbf(train, group, delta, lambda = 1)
 
 \item{group}{A vector of groups}
 
-\item{delta}{}
+\item{delta}{Tuning parameter}
 
-\item{lambda}{}
+\item{lambda}{Tuning parameter}
 }
 \value{
 A vector of selected features

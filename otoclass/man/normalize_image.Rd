@@ -8,15 +8,15 @@ normalize_image(dat, n, datCompare = NULL, forceFlip = FALSE,
   flipByPosition = c("No", "Left", "Right"))
 }
 \arguments{
-\item{dat}{}
+\item{dat}{otolith_image object}
 
-\item{n}{}
+\item{n}{Number of coordinates to output}
 
-\item{datCompare}{}
+\item{datCompare}{Data to compare with}
 
-\item{forceFlip}{}
+\item{forceFlip}{Force a flip of the otolith?}
 
-\item{flipByPosition}{}
+\item{flipByPosition}{Position (Left/Right) to flip. Use 'No' if otoliths should not be flipped by position.}
 }
 \value{
 A normalized Otolith Image

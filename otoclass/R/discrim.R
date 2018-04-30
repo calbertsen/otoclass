@@ -20,6 +20,8 @@ which.max.safe <- function(x,grplevel){
 #' @param verbose Write maximum gradient components to the terminal?
 #' @param dist Distribution to use (currently ignored)
 #'
+#' @param prior Prior probability for groups
+#' @param nrr Not used
 #' @return stuff
 #' @importFrom stats cov
 #' @export
@@ -28,38 +30,7 @@ discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "norma
     lpi <- log(prior)
 
     if(type == "rrlda"){
-        ## G <-  model.matrix(~group-1)
-        ## M <- sapply(1:nlevels(group),
-        ##               function(i)apply(matrix(train[as.numeric(group)==i,],
-        ##                                       ncol=dim(train)[2]),
-        ##                                2,mean))
-        ## if(!is.vector(M))
-        ##     M <- t(M)
-        ## W <- t(train-G%*%M)%*%(train-G%*%M)/(-diff(dim(G)))
-        ## ew <- eigen(W)
-        ## rankw <- sum(ew$values>1e-04)
-        ## Dsqinv <- diag(x=sqrt(1/ew$values[1:rankw]),ncol=length(ew$values[1:rankw]))
-        ## trainS <- train%*%ew$vectors[,1:rankw]%*%Dsqinv
-        ## MS <- sapply(1:nlevels(group),
-        ##               function(i)apply(matrix(trainS[as.numeric(group)==i,],
-        ##                                       ncol=dim(trainS)[2]),
-        ##                                2,mean))
-        ## if(!is.vector(MS))
-        ##     MS <- t(MS)    
-        ## WS <- t(trainS-G%*%MS)%*%(trainS-G%*%MS)/(-diff(dim(G)))
-
-        ## xbar <- prior%*%MS
-        ## One <- rep(1,dim(G)[1])
-        ## Ct <- t(trainS-One%*%xbar)%*%(trainS-One%*%xbar)/(dim(G)[1]-dim(xbar)[2])
-        ## B <- Ct-WS
-        ## eb <- eigen(B)
-        ## rank <- sum(eb$values>1e-04)
-        ## transfmat <- ew$vectors[,1:rankw]%*%Dsqinv%*%eb$vectors[,1:min(nrr,
-        ##                                                      rank,
-        ##                                                      nlevels(group)-1)]
-        ## propExpl <- (eb$values/sum(eb$values))[1:min(nrr,
-        ##                                              rank,
-        ##                                              nlevels(group)-1)]
+        warning("Not supported")
         mn <- sapply(1:nlevels(group),
                      function(i)apply(train[as.numeric(group)==i,],2,mean))
         W <- stats::cov(train-t(mn[,group]))
@@ -74,7 +45,7 @@ discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "norma
         testUse <- test%*%transfmat
         trainUse <- train%*%transfmat
 
-        mn <- t(M%*%transfmat)
+        mn <- t(mn%*%transfmat)
         sig <- diag(rep(1,dim(mn)[1]))
         lnorm <- function(i){
             apply(testUse,1,function(x)mvnorm(as.vector(x),
@@ -162,13 +133,13 @@ discrim <- function(train, group, test,type = "lda", verbose=TRUE, dist = "norma
 
 ##' discrim with TMB
 ##'
-##' @param train 
-##' @param group 
-##' @param test 
-##' @param type 
-##' @param verbose 
-##' @param dist 
-##' @param prior 
+##' @param train training data
+##' @param group training groups
+##' @param test test data
+##' @param type type of analysis: lda or qda
+##' @param verbose should a lot of output be printed?
+##' @param dist not currently used
+##' @param prior prior probability for groups
 ##' @return ...
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom TMB MakeADFun

@@ -8,19 +8,19 @@ discrimTMB(train, group, test, type = "lda", verbose = TRUE,
   dist = "normal", prior = table(group)/length(group))
 }
 \arguments{
-\item{train}{}
+\item{train}{training data}
 
-\item{group}{}
+\item{group}{training groups}
 
-\item{test}{}
+\item{test}{test data}
 
-\item{type}{}
+\item{type}{type of analysis: lda or qda}
 
-\item{verbose}{}
+\item{verbose}{should a lot of output be printed?}
 
-\item{dist}{}
+\item{dist}{not currently used}
 
-\item{prior}{}
+\item{prior}{prior probability for groups}
 }
 \value{
 ...

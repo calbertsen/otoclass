@@ -28,8 +28,8 @@ SU <- function(x,y,nx=5,ny=5){
 ##' @references http://pdf.aminer.org/000/335/746/feature_selection_for_high_dimensional_data_a_fast_correlation_based.pdf
 ##' @param train A matrix of training data
 ##' @param group A vector of groups
-##' @param delta 
-##' @param lambda 
+##' @param delta Tuning parameter
+##' @param lambda Tuning parameter
 ##' @return A vector of selected features
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stats na.omit

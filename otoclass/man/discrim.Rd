@@ -19,6 +19,10 @@ discrim(train, group, test, type = "lda", verbose = TRUE, dist = "normal",
 \item{verbose}{Write maximum gradient components to the terminal?}
 
 \item{dist}{Distribution to use (currently ignored)}
+
+\item{prior}{Prior probability for groups}
+
+\item{nrr}{Not used}
 }
 \value{
 stuff

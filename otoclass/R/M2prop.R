@@ -1,4 +1,3 @@
-#' @export
 
 M2prop <- function(pred,Mlist){
 

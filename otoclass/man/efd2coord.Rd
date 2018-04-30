@@ -7,19 +7,19 @@
 efd2coord(n, A, B, C, D, A0 = 0, C0 = 0)
 }
 \arguments{
-\item{n}{}
+\item{n}{Number of coordinates to calculate}
 
-\item{A}{}
+\item{A}{A EFD coefficients}
 
-\item{B}{}
+\item{B}{B EFD coefficients}
 
-\item{C}{}
+\item{C}{C EFD coefficients}
 
-\item{D}{}
+\item{D}{D EFD coefficients}
 
-\item{A0}{}
+\item{A0}{A0 EFD coefficients}
 
-\item{C0}{}
+\item{C0}{C0 EFD coefficients}
 }
 \value{
 Matrix of coordinates

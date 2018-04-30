@@ -112,6 +112,7 @@ LineLength <- function(v1,v2){
 ##' @importFrom jpeg readJPEG
 ##' @importFrom png readPNG
 ##' @importFrom tiff readTIFF
+##' @importFrom utils tail
 getPixelMatrix <- function(file, grey=TRUE){
     if(grepl("\\.jp(e)*g$",file,ignore.case=TRUE)){
         im <- jpeg::readJPEG(file)
@@ -133,16 +134,18 @@ getPixelMatrix <- function(file, grey=TRUE){
 
 ##' Read Otolith Images and Extract Contours
 ##'
-##' @param file 
-##' @param noiseFactor 
-##' @param onlyOne 
-##' @param minPixelDiff 
-##' @param extreme 
-##' @param pixelwise 
-##' @param assignSinglesByPosition 
+##' @param file Image file path
+##' @param noiseFactor Scalar value determining cutoff value for background noise on image. If NULL, a value is calculated automatically.
+##' @param onlyOne Boolean value. Is there only one otolith on the image?
+##' @param minPixelDiff Minimum pixel difference between otoliths
+##' @param extreme Boolean value. Should pixel values be converted to 0/1?
+##' @param pixelwise Boolean value. If TRUE, a pixel-wise algorithm is used to extract contours; otherwise, \code{grDevices::contourLines} is used.
+##' @param assignSinglesByPosition Should single otoliths be assigned to Left/Right based on position on image?
 ##' @return otolith image information
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stats kmeans relevel
+##' @importFrom graphics hist
+##' @importFrom grDevices contourLines
 ##' @export
 read_image<- function(file,noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0.05 * min(nc,nr), extreme = TRUE, pixelwise = FALSE, assignSinglesByPosition = TRUE){
     r<-getPixelMatrix(file)
@@ -157,7 +160,7 @@ read_image<- function(file,noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0
     }
 
     if(is.null(noiseFactor)){
-        hh<-hist(rv,breaks=(-1):maxrv + 0.5,plot=FALSE)
+        hh<-graphics::hist(rv,breaks=(-1):maxrv + 0.5,plot=FALSE)
         hd<-hh$density
         mv1 <- 1:round(maxrv/2)
         mv2 <- (round(maxrv/2)+1):maxrv
@@ -213,7 +216,7 @@ read_image<- function(file,noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0
             cc <- Conte((rv3))
             cont <- cbind(cc$X,cc$Y)
         }else{
-            cc<-contourLines(1:nr,1:nc,rv3,levels=ifelse(extreme,255,cutVal))
+            cc<-grDevices::contourLines(1:nr,1:nc,rv3,levels=ifelse(extreme,255,cutVal))
             cl <- unlist(lapply(cc,function(x)sum(sapply(2:length(x$x),
                                                       function(i)LineLength(c(x$x[i],x$y[i]),
                                                                             c(x$x[i-1],x$y[i-1]))))
@@ -236,11 +239,11 @@ read_image<- function(file,noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0
 
 ##' Normalize an Otolith Image
 ##'
-##' @param dat 
-##' @param n 
-##' @param datCompare 
-##' @param forceFlip 
-##' @param flipByPosition 
+##' @param dat otolith_image object
+##' @param n Number of coordinates to output
+##' @param datCompare Data to compare with
+##' @param forceFlip Force a flip of the otolith?
+##' @param flipByPosition Position (Left/Right) to flip. Use 'No' if otoliths should not be flipped by position.
 ##' @return A normalized Otolith Image
 ##' @author Christoffer Moesgaard Albertsen
 ##' @export
@@ -257,7 +260,7 @@ normalize_image <- function(dat,n,datCompare=NULL,forceFlip=FALSE,flipByPosition
     }
     if(flipByPosition == attr(dat,"Position"))
         datNew <- flip_image(datNew,datNew,TRUE)
-    
+    attr(datNew,"Normalized") <- TRUE
     return(datNew)
 }
 

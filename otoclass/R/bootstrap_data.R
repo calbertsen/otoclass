@@ -1,6 +1,5 @@
 
 #' @importFrom stats sd
-#' @export
 bootstrap_data <- function(covariates,group,nGroup,nGroupTest=nGroup){
 
     ncov <- dim(covariates)[2]

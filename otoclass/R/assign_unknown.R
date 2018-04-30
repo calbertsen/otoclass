@@ -8,8 +8,10 @@
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stats glm predict.glm binomial
 ##' @export
-assign_unknown <- function(nimList,N=60,delta=0.01,lambda=1, link = "probit"){
-    efds <- do.call("rbind",lapply(nimList,efd,N=60,returnAsList=FALSE))
+assign_unknown <- function(nimList,N=60,delta=0.01,lambda=1, link = "probit", normalize_efd = FALSE){
+    efds <- do.call("rbind",lapply(nimList,efd,N=60,returnAsList=FALSE, normalize = normalize_efd))
+    if(normalize_efd)
+        efds <- efds[,!(colnames(efds) %in% c("A1","B1","C1"))]
     position <- unlist(lapply(nimList,attr,which="Position"))
     indx <- which(position == "Unknown")
     featUse <- fcbf(efds[-indx,],factor(position[-indx]),delta,lambda)

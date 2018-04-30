@@ -75,11 +75,12 @@ newStart_image <- function(dat){
     return(datNew)
 }
 
-flip_image <- function(dat,datCompare,forceFlip=FALSE){
+flip_image <- function(dat,datCompare,forceFlip=FALSE, coord = 2){
     # Both dat and datCompare must be preprocessed
     dat1 <- dat
     dat2 <- dat
-    dat2[,2] <- -dat2[,2]
+    mid <- mean(range(dat2[,coord]))
+    dat2[,coord] <- mid - (dat2[,coord] - mid)
     dat2 <-  newStart_image(dat2)
     attr(dat2,"Flipped") <- TRUE
 
@@ -123,9 +124,9 @@ getPixelMatrix <- function(file, grey=TRUE){
     }
     if(grey & length(dim(im)) == 3){
         if(dim(im)[3] >= 3)
-            imOut <- (0.2989 * im[,,1] + 0.5870 * im[,,2] + 0.1140 * im[,,3]) * 255
+            imOut <- round((0.2989 * im[,,1] + 0.5870 * im[,,2] + 0.1140 * im[,,3]) * 255)
     }else{
-        imOut <- im * 255
+        imOut <- round(im * 255)
     }
     return(imOut)
 }

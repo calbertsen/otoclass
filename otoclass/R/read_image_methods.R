@@ -75,7 +75,7 @@ plot.otolith_contour <- function(x,asUsed = FALSE, ...){
                                     gaussianBlur = attr(x,"GaussianBlur")$used,
                                     gaussianBlurSize = attr(x,"GaussianBlur")$size,
                                     gaussianBlurSigma = attr(x,"GaussianBlur")$sigma,
-                                    unsharp = attr(x,"UnsharpMask")$size
+                                    unsharp = attr(x,"UnsharpMask")$used
                                     )
     }
     par(mar = c(0,0,0,0), oma = c(0,0,0,0))

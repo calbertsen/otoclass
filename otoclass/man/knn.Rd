@@ -4,7 +4,7 @@
 \alias{knn}
 \title{k Nearest Neighbour}
 \usage{
-knn(train, group, test, kn, dist = "euclidian")
+knn(train, group, test, kn = 1, dist = c("L2", "L1", "Linf"))
 }
 \arguments{
 \item{train}{A matrix of (continuous) features for the training sample}
@@ -15,7 +15,7 @@ knn(train, group, test, kn, dist = "euclidian")
 
 \item{kn}{Number of neighbours to consider}
 
-\item{dist}{Distance measure to use ("euclidian", "manhattan","chebyshev")}
+\item{dist}{Distance measure to use ("L1", "L2","Linf"). Default is Euclidian distance ("L2").}
 }
 \description{
 \code{knn} returns the votes to each level factor(group) from the kn nearest neighbours to test from train.

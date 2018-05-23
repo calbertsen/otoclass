@@ -132,6 +132,41 @@ getPixelMatrix <- function(file, grey=TRUE){
     return(imOut)
 }
 
+
+transformPixelMatrix <- function(pic,
+                                 logisticTransform = FALSE,
+                                 logisticTransformLocation = 255/2,
+                                 logisticTransformScale = 1,
+                                 gaussianBlur = FALSE,
+                                 gaussianBlurSize = 3,
+                                 gaussianBlurSigma = 1,
+                                 unsharp = FALSE) {
+    if(logisticTransform){
+        pic <- plogis(pic,logisticTransformLocation,logisticTransformScale) * 255     
+    }
+    if(gaussianBlur & !unsharp){
+            nr <- nrow(pic)
+            nc <- ncol(pic)
+            picOld <- pic
+            borderCol <- mean(c(pic[c(1:(nr*0.02),nr:(nr-nr*0.02)),],pic[,c(1:(nc*0.02),nc:(nc-nc*0.02))]))
+            pic <- matrix(borderCol,nr + (gaussianBlurSize-1),nc + (gaussianBlurSize-1))
+            pic[((gaussianBlurSize-1)/2+1):(nrow(pic)-(gaussianBlurSize-1)/2),((gaussianBlurSize-1)/2+1):(ncol(pic)-(gaussianBlurSize-1)/2)] <- picOld
+            pic <- gaussian_blur(pic, gaussianBlurSize, gaussianBlurSigma)
+    }
+    if(unsharp){
+        nr <- nrow(pic)
+        nc <- ncol(pic)
+        picOld <- pic
+        borderCol <- mean(c(pic[c(1:(nr*0.02),nr:(nr-nr*0.02)),],pic[,c(1:(nc*0.02),nc:(nc-nc*0.02))]))
+        pic <- matrix(borderCol,nr + (gaussianBlurSize-1),nc+(gaussianBlurSize-1))
+        pic[((gaussianBlurSize-1)/2+1):(nrow(pic)-(gaussianBlurSize-1)/2),((gaussianBlurSize-1)/2+1):(ncol(pic)-(gaussianBlurSize-1)/2)] <- picOld
+        pic <- unsharpmask(pic, gaussianBlurSize, gaussianBlurSigma)
+        pic[pic < 0] <- 0
+        pic[pic > 255] <- 255
+    }
+    return(pic)
+}
+
 ##' Read Otolith Images and Extract Contours
 ##'
 ##' @param file Image file path
@@ -141,56 +176,113 @@ getPixelMatrix <- function(file, grey=TRUE){
 ##' @param extreme Boolean value. Should pixel values be converted to 0/1?
 ##' @param pixelwise Boolean value. If TRUE, a pixel-wise algorithm is used to extract contours; otherwise, \code{grDevices::contourLines} is used.
 ##' @param assignSinglesByPosition Should single otoliths be assigned to Left/Right based on position on image?
+##' @param minCountScale See details
 ##' @return otolith image information
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stats kmeans relevel
 ##' @importFrom graphics hist
 ##' @importFrom grDevices contourLines
 ##' @export
-read_image<- function(file,noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0.05 * min(nc,nr), extreme = TRUE, pixelwise = FALSE, assignSinglesByPosition = TRUE){
+read_image<- function(file,
+                      noiseFactor = NULL,
+                      onlyOne = FALSE,
+                      minPixelDiff = 0.05 * min(nc,nr),
+                      extreme = TRUE,
+                      borderBasedCutOff = FALSE,
+                      logisticTransform = FALSE,
+                      logisticTransformLocation = c("mean","median","borderMean","borderMedian"),
+                      logisticTransformScale = 1,
+                      gaussianBlur = FALSE,
+                      gaussianBlurSize = round(0.02 * min(nc,nr)),
+                      gaussianBlurSigma = gaussianBlurSize / 10,
+                      unsharp = FALSE,
+                      pixelwise = FALSE,
+                      assignSinglesByPosition = TRUE,
+                      minCountScale = 0,
+                      minCountForMax = 1e-4,
+                      zeroCutOffPercent = 0.05){
     r<-getPixelMatrix(file)
     rv <- t(r[nrow(r):1,])
-    maxrv <- max(rv)
     nc <- ncol(rv)
     nr <- nrow(rv)
 
+    
     whiteBorder <- mean(c(rv[c(1:(nr*0.02),nr:(nr-nr*0.02)),],rv[,c(1:(nc*0.02),nc:(nc-nc*0.02))])) > 255/2
     if(whiteBorder){
         rv <- 255 - rv
     }
 
+    if(!is.numeric(logisticTransformLocation)){
+        logisticTransformLocation <- match.arg(logisticTransformLocation)
+    }
+    ltl <- NA
+    if(logisticTransform){
+        bordervec <- c(rv[c(1:(nr*0.02),nr:(nr-nr*0.02)),],rv[,c(1:(nc*0.02),nc:(nc-nc*0.02))])
+        if(is.numeric(logisticTransformLocation)){
+            ltl <- logisticTransformLocation[1]
+        }else{
+            ltl <- switch(logisticTransformLocation,
+                          mean = mean(rv),
+                          median = median(rv),
+                          borderMean = mean(bordervec),
+                          borderMedian = median(bordervec)
+                          )
+        }       
+    }
+    rv <- transformPixelMatrix(rv,
+                               logisticTransform = logisticTransform,
+                               logisticTransformLocation = ltl,
+                               logisticTransformScale = logisticTransformScale,
+                               gaussianBlur = gaussianBlur,
+                               gaussianBlurSize = gaussianBlurSize,
+                               gaussianBlurSigma = gaussianBlurSigma,
+                               unsharp = unsharp)
+    
+    maxrv <- max(rv)
+
     if(is.null(noiseFactor)){
-        hh<-graphics::hist(rv,breaks=(-1):maxrv + 0.5,plot=FALSE)
-        hd<-hh$density
-        mv1 <- 1:round(maxrv/2)
-        mv2 <- (round(maxrv/2)+1):maxrv
-        m1 <- mv1[which.max(hd[mv1 + 1])]
-        m2 <- mv2[which.max(hd[mv2 + 1])]
-        i1 <- which.min(hd[m1:m2 + 1]) - 1
-        noiseFactor <- maxrv / i1
+        if(borderBasedCutOff){
+            i1 <- quantile(c(rv[c(1:(nr*0.02),nr:(nr-nr*0.02)),],rv[,c(1:(nc*0.02),nc:(nc-nc*0.02))]),0.99)
+        }else{
+            hh<-graphics::hist(rv,breaks=(-1):maxrv + 0.5,plot=FALSE)
+            hd<-hh$density * (hh$counts > nc*nr * minCountScale)
+            ## mv1 <- 1:round(maxrv/2)
+            ## mv2 <- (round(maxrv/2)+1):maxrv
+            mx <- max(which(hh$counts > nc*nr * minCountForMax))
+            mv1 <- 1:round(mx/2)
+            mv2 <- (round(mx/2)+1):mx
+            m1 <- mv1[which.max(hd[mv1 + 1])]
+            m2 <- mv2[which.max(hd[mv2 + 1])]
+            i1 <- max(m1) + which.min(hd[m1:m2 + 1]) - 1
+        }
+        noiseFactor <- maxrv / i1 
     }        
     rv[rv< maxrv/noiseFactor] <- 0
     cutVal <- maxrv/noiseFactor
     
     if(extreme)
         rv[rv > 0] <- 255
-
+    
     ##rvals <- t(matrix(rv,nrow=nr,ncol=nc,byrow=TRUE))
+    lvls <- c("Left","Right")
+    orderIndx <- 1
     if(!onlyOne){
         ## reshape2::melt
         mrval <- cbind(expand.grid(1:nr,1:nc),Val=as.vector(rv))
 
         mx <- apply(rv,1,mean)
-        #mx[mx<5] <- 0
+        ##mx[mx<5] <- 0
         my <- apply(rv,2,mean)
-        #my[my<5] <- 0
-        difx <- which(diff(which(mx==0))>minPixelDiff)
-        dify <- which(diff(which(my==0))>minPixelDiff)
+        ##my[my<5] <- 0
+        difx <- which(diff(which(mx < maxrv*zeroCutOffPercent))>minPixelDiff)
+        dify <- which(diff(which(my < maxrv*zeroCutOffPercent))>minPixelDiff)
         checkx <- length(difx)>1
         checky <- length(dify)>1
 
         if(any(c(checkx,checky))){
-            nclust <- 2            
+            nclust <- 2
+            if(!checkx & checky)
+                orderIndx <- 2
         }else{
             nclust <- 1
         }
@@ -201,7 +293,7 @@ read_image<- function(file,noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0
         nclust <- 1
     }
     km$cluster <- factor(km$cluster)
-    levels(km$cluster) <- c("Left","Right")[order(km$centers[,1])]
+    levels(km$cluster) <- c("Left","Right")[order(km$centers[,orderIndx])]
     if(!assignSinglesByPosition & nclust == 1){
         levels(km$cluster) <- c("Unknown")
     }
@@ -228,11 +320,29 @@ read_image<- function(file,noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0
         attr(res[[i]],"Position") <- levels(km$cluster)[i]
         attr(res[[i]],"File") <- file
         attr(res[[i]],"NoiseFactor") <- noiseFactor
+        attr(res[[i]],"LogisticTransform") <- list(used = logisticTransform,
+                                                   location = ltl,
+                                                   scale = logisticTransformScale)
+        attr(res[[i]],"GaussianBlur") <- list(used = gaussianBlur & !unsharp,
+                                              size = gaussianBlurSize,
+                                              sigma = gaussianBlurSigma)
+        attr(res,"UnsharpMask") <- list(used = unsharp)
         attr(res[[i]],"ImagePixels") <- c(nc,nr)
         attr(res[[i]],"Normalized") <- FALSE
         attr(res[[i]],"Flipped") <- FALSE
-        class(res[[i]]) <- "otolith_image"
+        class(res[[i]]) <- "otolith_contour"
     }
+    attr(res,"File") <- file
+    attr(res,"NoiseFactor") <- noiseFactor
+    attr(res,"LogisticTransform") <- list(used = logisticTransform,
+                                          location = ltl,
+                                          scale = logisticTransformScale)
+    attr(res,"GaussianBlur") <- list(used = gaussianBlur & !unsharp,
+                                     size = gaussianBlurSize,
+                                     sigma = gaussianBlurSigma)
+    attr(res,"UnsharpMask") <- list(used = unsharp)
+    attr(res,"ImagePixels") <- c(nc,nr)
+    class(res) <- "otolith_image"
     return(res)
     
 }

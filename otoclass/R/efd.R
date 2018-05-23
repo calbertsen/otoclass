@@ -48,9 +48,7 @@ efd <- function(dat,N,n=nrow(dat),returnAsList=FALSE, normalize = FALSE){
     ccalc <- cc(1:N)
     dcalc <- d(1:N)
     a0 <- 1/T * sum(dat[,1]*c(0,dt))
-    names(a0) <- "A0"
     c0 <- 1/T * sum(dat[,2]*c(0,dt))
-    names(c0) <- "C0"
 
     if(normalize){
         theta <- (0.5 * atan2( 2 * ( acalc[1] * bcalc[1] + ccalc[1] * dcalc[1] ),
@@ -66,8 +64,12 @@ efd <- function(dat,N,n=nrow(dat),returnAsList=FALSE, normalize = FALSE){
         bcalc <- nefd[,2]
         ccalc <- nefd[,3]
         dcalc <- nefd[,4]
+        a0 <- 0
+        c0 <- 0
     }
     
+    names(a0) <- "A0"
+    names(c0) <- "C0"
     names(acalc) <- paste0("A",1:N)
     names(bcalc) <- paste0("B",1:N)
     names(ccalc) <- paste0("C",1:N)
@@ -104,5 +106,24 @@ efd2coord <- function(n,A,B,C,D,A0=0,C0=0){
     T <- tt[length(tt)]
     x <- A0 + sapply(tt,function(t)sum(A*cos(2*1:length(A)*pi*t/T)+B*sin(2*1:length(A)*pi*t/T)))
     y <- C0 + sapply(tt,function(t)sum(C*cos(2*1:length(A)*pi*t/T)+D*sin(2*1:length(A)*pi*t/T)))
+    return(cbind(x,y))
+}
+
+
+##' Calculate XY-coordinates from Elliptical Fourier Descriptors
+##'
+##' @param n Number of coordinates to calculate
+##' @param A A EFD coefficients
+##' @param B B EFD coefficients
+##' @param C C EFD coefficients
+##' @param D D EFD coefficients
+##' @param A0 A0 EFD coefficients
+##' @param C0 C0 EFD coefficients
+##' @return Matrix of coordinates
+##' @author Christoffer Moesgaard Albertsen
+efd2coordSEXP <- function(n,A,B,C,D,A0=0,C0=0){
+    coords <- .Call("efd2coordSEXP", efd = rbind(A,B,C,D), N=n, PACKAGE = "otoclass")
+    x <- A0 + coords[1,]
+    y <- C0 + coords[2,]
     return(cbind(x,y))
 }

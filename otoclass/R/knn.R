@@ -6,18 +6,22 @@
 #' @param group A vector of group labels for the training sample
 #' @param test A matrix of (continuous) features for the test sample
 #' @param kn Number of neighbours to consider
-#' @param dist Distance measure to use ("euclidian", "manhattan","chebyshev")
+#' @param dist Distance measure to use ("L1", "L2","Linf"). Default is Euclidian distance ("L2").
 
 #' @export
-knn <- function(train, group, test, kn, dist = "euclidian") {
+knn <- function(train,
+                group,
+                test,
+                kn = 1,
+                dist = c("L2", "L1","Linf")
+                ) {
     if(!is.factor(group)){
         group <- factor(group)
     }
-    disttype <- as.numeric(factor(dist,levels=c("euclidian", "manhattan","L infinity")))
-    if(is.na(disttype)) stop("Invalid distance measure. Must be one of: euclidian, manhattan, and chebyshev")
+    dist <- match.arg(dist)
     res <- list()
     class(res) <- "oto_knn"
-    res$probabilities <- .Call('otoclass_knn', PACKAGE = 'otoclass', train, as.numeric(group)-1, test, kn, disttype)
+    res$probabilities <- .Call('knn', PACKAGE = 'otoclass', train = t(train), group = as.integer(group)-1L, test = t(test), kn = kn, disttype = as.integer(factor(dist,c("L2", "L1","Linf"))))
     colnames(res$probabilities) <- levels(group)
     rownames(res$probabilities) <- rownames(test)
     res$predicted <- factor(levels(group)[apply(res$probabilities,1,which.max)], levels = levels(group))

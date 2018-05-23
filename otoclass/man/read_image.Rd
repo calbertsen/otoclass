@@ -5,8 +5,13 @@
 \title{Read Otolith Images and Extract Contours}
 \usage{
 read_image(file, noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0.05
-  * min(nc, nr), extreme = TRUE, pixelwise = FALSE,
-  assignSinglesByPosition = TRUE)
+  * min(nc, nr), extreme = TRUE, borderBasedCutOff = FALSE,
+  logisticTransform = FALSE, logisticTransformLocation = c("mean", "median",
+  "borderMean", "borderMedian"), logisticTransformScale = 1,
+  gaussianBlur = FALSE, gaussianBlurSize = round(0.02 * min(nc, nr)),
+  gaussianBlurSigma = gaussianBlurSize/10, unsharp = FALSE,
+  pixelwise = FALSE, assignSinglesByPosition = TRUE, minCountScale = 0,
+  minCountForMax = 1e-04, zeroCutOffPercent = 0.05)
 }
 \arguments{
 \item{file}{Image file path}
@@ -22,6 +27,8 @@ read_image(file, noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0.05
 \item{pixelwise}{Boolean value. If TRUE, a pixel-wise algorithm is used to extract contours; otherwise, \code{grDevices::contourLines} is used.}
 
 \item{assignSinglesByPosition}{Should single otoliths be assigned to Left/Right based on position on image?}
+
+\item{minCountScale}{See details}
 }
 \value{
 otolith image information

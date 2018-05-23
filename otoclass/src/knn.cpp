@@ -1,37 +1,36 @@
-#include <Rcpp.h>
-#include <math.h>
+#include "../inst/include/knn.hpp"
 
-using namespace Rcpp;
-  
-double distance(NumericVector x, NumericVector y,int type){
+double distance(doubleVector x, doubleVector y,int type){
 
   double ans;
-
+  doubleVector z = x-y;
+  
   switch(type){
   case 1: // Euclidian (L_2)
-    ans = sqrt(sum(pow((x-y),2)));
+    // ans = sqrt(sum(pow((x-y),2)));
+    ans = sqrt(z.pow(2).sum());
   case 2: // Manhattan (L_1)
-    ans = sum(abs(x-y));
+    // ans = sum(abs(x-y));
+    ans = z.abs().sum();
   case 3: // Chebyshev (L_\infty)
-    ans = max(abs(x-y));
+    // ans = max(abs(x-y));
+    ans = z.abs().maxCoeff();
   }
   return ans;
 }
 
-// [[Rcpp::export]]
-NumericMatrix knn(NumericMatrix train, IntegerVector group, NumericMatrix test, int kn, int disttype){
-
-  int ngroup = sort_unique(group).size();
-
-  NumericMatrix pred(test.nrow(),ngroup);
-  for(int i = 0; i < test.nrow(); ++i){ // For each test point
-    NumericVector dists(kn);
-    dists = dists + 1000000000.0;
-    IntegerVector indx(kn);
-
+MatrixXd knn_work(MatrixXd train, intVector group, MatrixXd test, int kn, int disttype, int ngroup){
+  MatrixXd pred(test.cols(),ngroup);
+  pred.setZero();
+  for(int i = 0; i < test.cols(); ++i){ // For each test point
+    doubleVector dists(kn);
+    dists.setZero();
+    dists += HUGE_VAL;
+    doubleVector indx(kn);
+    indx.setZero();
       
-    for(int j = 0; j < train.nrow(); ++j){ // Run through train points
-      double d = distance(train.row(j),test.row(i),disttype); // Find the distance
+    for(int j = 0; j < train.cols(); ++j){ // Run through train points
+      double d = distance(train.col(j),test.col(i),disttype); // Find the distance
       if(d < dists(kn-1)){ // If distance is more than the kn furthest away (so far) it can not be one of the kn nearest neighbours. Otherwise insert in list.
 	for (int k = 0; k < kn; ++k){ // Run trough list of neighbours 
 	  if (d < dists(k)){// If the training point is closer than the one we are looking at, it should be inserted here
@@ -56,4 +55,15 @@ NumericMatrix knn(NumericMatrix train, IntegerVector group, NumericMatrix test, 
 
   return pred;
 
+}
+
+
+extern "C" {
+  SEXP knn(SEXP train, SEXP group, SEXP test, SEXP kn, SEXP disttype){
+    SEXP uniqueGroups;
+    PROTECT(uniqueGroups = Rf_eval( Rf_lang2( Rf_install("unique"), group), R_GlobalEnv));
+    MatrixXd res = knn_work(asDoubleMatrix(train), asIntVector(group), asDoubleMatrix(test), asInteger(kn), asInteger(disttype), Rf_length(uniqueGroups));
+    UNPROTECT(1);
+    return asSEXP(res);
+  }
 }

@@ -326,7 +326,7 @@ read_image<- function(file,
         attr(res[[i]],"GaussianBlur") <- list(used = gaussianBlur & !unsharp,
                                               size = gaussianBlurSize,
                                               sigma = gaussianBlurSigma)
-        attr(res,"UnsharpMask") <- list(used = unsharp)
+        attr(res[[i]],"UnsharpMask") <- list(used = unsharp)
         attr(res[[i]],"ImagePixels") <- c(nc,nr)
         attr(res[[i]],"Normalized") <- FALSE
         attr(res[[i]],"Flipped") <- FALSE

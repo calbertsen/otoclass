@@ -160,7 +160,7 @@ transformPixelMatrix <- function(pic,
         borderCol <- mean(c(pic[c(1:(nr*0.02),nr:(nr-nr*0.02)),],pic[,c(1:(nc*0.02),nc:(nc-nc*0.02))]))
         pic <- matrix(borderCol,nr + (gaussianBlurSize-1),nc+(gaussianBlurSize-1))
         pic[((gaussianBlurSize-1)/2+1):(nrow(pic)-(gaussianBlurSize-1)/2),((gaussianBlurSize-1)/2+1):(ncol(pic)-(gaussianBlurSize-1)/2)] <- picOld
-        pic <- unsharpmask(pic, gaussianBlurSize, gaussianBlurSigma)
+        pic <- round(unsharpmask(pic, gaussianBlurSize, gaussianBlurSigma))
         pic[pic < 0] <- 0
         pic[pic > 255] <- 255
     }

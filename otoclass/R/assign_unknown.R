@@ -16,7 +16,8 @@ assign_unknown <- function(nimList,
                            lambda=1,
                            link = "probit",
                            normalize_efd = FALSE){
-    efds <- do.call("rbind",lapply(nimList,efd,N=60,returnAsList=FALSE, normalize = normalize_efd))
+    efds <- do.call("rbind",lapply(nimList,efd,N=N,returnAsList=FALSE, normalize = normalize_efd))
+    efds <- efds[,!(colnames(efds) %in% c("A0","C0"))]
     if(normalize_efd)
         efds <- efds[,!(colnames(efds) %in% c("A1","B1","C1"))]
     position <- unlist(lapply(nimList,attr,which="Position"))
@@ -25,8 +26,8 @@ assign_unknown <- function(nimList,
     pgrp <- factor(position[-indx])
     fit <- stats::glm(pgrp ~ .,
                family=stats::binomial(link),
-               data=data.frame(efds[-indx,featUse]))
-    pred <- stats::predict.glm(fit,newdata=data.frame(efds[indx,featUse]),type="response")
+               data=data.frame(efds[-indx,featUse,drop=FALSE]))
+    pred <- stats::predict.glm(fit,newdata=data.frame(efds[indx,featUse,drop=FALSE]),type="response")
     for(i in 1:length(indx)){
         attr(nimList[[indx[i]]],"Position") <- levels(pgrp)[as.numeric(pred[i] > 0.5) + 1]
         attr(nimList[[indx[i]]],"Position_probability_Right") <- pred[i]

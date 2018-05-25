@@ -17,12 +17,12 @@ assign_unknown <- function(nimList,
                            link = "probit",
                            normalize_efd = FALSE){
     efds <- do.call("rbind",lapply(nimList,efd,N=N,returnAsList=FALSE, normalize = normalize_efd))
-    efds <- efds[,!(colnames(efds) %in% c("A0","C0"))]
+    efds <- efds[,!(colnames(efds) %in% c("A0","C0")), drop = FALSE]
     if(normalize_efd)
-        efds <- efds[,!(colnames(efds) %in% c("A1","B1","C1"))]
+        efds <- efds[,!(colnames(efds) %in% c("A1","B1","C1")), drop = FALSE]
     position <- unlist(lapply(nimList,attr,which="Position"))
     indx <- which(position == "Unknown")
-    featUse <- fcbf(efds[-indx,],factor(position[-indx]),delta,lambda)
+    featUse <- fcbf(efds[-indx,,drop=FALSE],factor(position[-indx]),delta,lambda)
     pgrp <- factor(position[-indx])
     fit <- stats::glm(pgrp ~ .,
                family=stats::binomial(link),

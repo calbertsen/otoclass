@@ -132,7 +132,7 @@ getPixelMatrix <- function(file, grey=TRUE){
     return(imOut)
 }
 
-
+##' @importFrom stats plogis
 transformPixelMatrix <- function(pic,
                                  logisticTransform = FALSE,
                                  logisticTransformLocation = 255/2,
@@ -142,7 +142,7 @@ transformPixelMatrix <- function(pic,
                                  gaussianBlurSigma = 1,
                                  unsharp = FALSE) {
     if(logisticTransform){
-        pic <- plogis(pic,logisticTransformLocation,logisticTransformScale) * 255     
+        pic <- stats::plogis(pic,logisticTransformLocation,logisticTransformScale) * 255     
     }
     if(gaussianBlur & !unsharp){
             nr <- nrow(pic)
@@ -174,12 +174,22 @@ transformPixelMatrix <- function(pic,
 ##' @param onlyOne Boolean value. Is there only one otolith on the image?
 ##' @param minPixelDiff Minimum pixel difference between otoliths
 ##' @param extreme Boolean value. Should pixel values be converted to 0/1?
+##' @param borderBasedCutOff Use a border based cut off?
+##' @param logisticTransform Do logistic transformation of image?
+##' @param logisticTransformLocation Location parameter for logistic transformation
+##' @param logisticTransformScale Scale parameter for logistic transformation
+##' @param gaussianBlur Do Gaussian blur of image?
+##' @param gaussianBlurSize Size (n x n) for Gaussian blur kernel
+##' @param gaussianBlurSigma Variance parameter of Gaussian distribution used to blur
+##' @param unsharp Do unsharp mask of image using the Gaussian blur arguments?
 ##' @param pixelwise Boolean value. If TRUE, a pixel-wise algorithm is used to extract contours; otherwise, \code{grDevices::contourLines} is used.
 ##' @param assignSinglesByPosition Should single otoliths be assigned to Left/Right based on position on image?
 ##' @param minCountScale See details
-##' @return otolith image information
+##' @param minCountForMax See details
+##' @param zeroCutOffPercent See details
+##' @return otolith image object
 ##' @author Christoffer Moesgaard Albertsen
-##' @importFrom stats kmeans relevel
+##' @importFrom stats kmeans relevel median quantile
 ##' @importFrom graphics hist
 ##' @importFrom grDevices contourLines
 ##' @export
@@ -223,9 +233,9 @@ read_image<- function(file,
         }else{
             ltl <- switch(logisticTransformLocation,
                           mean = mean(rv),
-                          median = median(rv),
+                          median = stats::median(rv),
                           borderMean = mean(bordervec),
-                          borderMedian = median(bordervec)
+                          borderMedian = stats::median(bordervec)
                           )
         }       
     }
@@ -242,7 +252,7 @@ read_image<- function(file,
 
     if(is.null(noiseFactor)){
         if(borderBasedCutOff){
-            i1 <- quantile(c(rv[c(1:(nr*0.02),nr:(nr-nr*0.02)),],rv[,c(1:(nc*0.02),nc:(nc-nc*0.02))]),0.99)
+            i1 <- stats::quantile(c(rv[c(1:(nr*0.02),nr:(nr-nr*0.02)),],rv[,c(1:(nc*0.02),nc:(nc-nc*0.02))]),0.99)
         }else{
             hh<-graphics::hist(rv,breaks=(-1):maxrv + 0.5,plot=FALSE)
             hd<-hh$density * (hh$counts > nc*nr * minCountScale)
@@ -330,6 +340,7 @@ read_image<- function(file,
         attr(res[[i]],"ImagePixels") <- c(nc,nr)
         attr(res[[i]],"Normalized") <- FALSE
         attr(res[[i]],"Flipped") <- FALSE
+        attr(res[[i]],"Area") <- polygon_area(res[[i]])
         class(res[[i]]) <- "otolith_contour"
     }
     attr(res,"File") <- file

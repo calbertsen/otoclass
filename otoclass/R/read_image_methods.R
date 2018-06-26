@@ -9,7 +9,7 @@
 ##' @export
 print.otolith_contour <- function(x, ...){
     cat("Otolith contour of", attr(x,"File"),"\n")
-    cat("Position:",attr(x,"Position"))
+    cat("Position:",attr(x,"Position"),"\n")
     invisible(x)
 }
 
@@ -19,11 +19,11 @@ print.otolith_contour <- function(x, ...){
 ##' @param ... further arguments
 ##' @return nothing
 ##' @author Christoffer Moesgaard Albertsen
-##' @method print otolith_contour
+##' @method print otolith_image
 ##' @export
 print.otolith_image <- function(x, ...){
     cat("Otolith image of", attr(x,"File"),"\n")
-    cat("Containing",length(x),ifelse(length(x)==1,"contour.","contours."))
+    cat("Containing",length(x),ifelse(length(x)==1,"contour.","contours."),"\n")
     invisible(x)
 }
 
@@ -31,10 +31,12 @@ print.otolith_image <- function(x, ...){
 ##' Plot otolith image
 ##'
 ##' @param x Otolith image
+##' @param asUsed Plot image as read; i.e. transformed
 ##' @param ... further arguments
 ##' @return nothing
 ##' @author Christoffer Moesgaard Albertsen
 ##' @method plot otolith_image
+##' @importFrom graphics par plot rasterImage lines
 ##' @export
 plot.otolith_image <- function(x,asUsed = FALSE, ...){
     pic <- getPixelMatrix(attr(x,"File"))
@@ -49,10 +51,10 @@ plot.otolith_image <- function(x,asUsed = FALSE, ...){
                                     unsharp = attr(x,"UnsharpMask")$used
                                     )
     }
-    par(mar = c(0,0,0,0), oma = c(0,0,0,0))
-    plot(0,0,xlim=c(1,ncol(pic)),ylim=c(1,nrow(pic)),asp=1, type = "n")
-    rasterImage(pic / 255,1,1,ncol(pic),nrow(pic))
-    invisible(lapply(x,lines, ...))
+    graphics::par(mar = c(0,0,0,0), oma = c(0,0,0,0))
+    graphics::plot(0,0,xlim=c(1,ncol(pic)),ylim=c(1,nrow(pic)),asp=1, type = "n")
+    graphics::rasterImage(pic / 255,1,1,ncol(pic),nrow(pic))
+    invisible(lapply(x,graphics::lines, ...))
     invisible(x)
 }
 
@@ -60,10 +62,12 @@ plot.otolith_image <- function(x,asUsed = FALSE, ...){
 ##' Plot otolith contour
 ##'
 ##' @param x Otolith contour
+##' @param asUsed Plot image as read; i.e. transformed
 ##' @param ... further arguments
 ##' @return nothing
 ##' @author Christoffer Moesgaard Albertsen
 ##' @method plot otolith_contour
+##' @importFrom graphics par plot rasterImage lines
 ##' @export
 plot.otolith_contour <- function(x,asUsed = FALSE, ...){
     pic <- getPixelMatrix(attr(x,"File"))
@@ -78,10 +82,10 @@ plot.otolith_contour <- function(x,asUsed = FALSE, ...){
                                     unsharp = attr(x,"UnsharpMask")$used
                                     )
     }
-    par(mar = c(0,0,0,0), oma = c(0,0,0,0))
-    plot(0,0,xlim=c(1,ncol(pic)),ylim=c(1,nrow(pic)),asp=1, type = "n")
-    rasterImage(pic / 255,1,1,ncol(pic),nrow(pic))
-    lines(x, ...)
+    graphics::par(mar = c(0,0,0,0), oma = c(0,0,0,0))
+    graphics::plot(0,0,xlim=c(1,ncol(pic)),ylim=c(1,nrow(pic)),asp=1, type = "n")
+    graphics::rasterImage(pic / 255,1,1,ncol(pic),nrow(pic))
+    graphics::lines(x, ...)
     invisible(x)
 }
 
@@ -89,16 +93,19 @@ plot.otolith_contour <- function(x,asUsed = FALSE, ...){
 ##' Plot otolith contour list
 ##'
 ##' @param x Otolith contour list
+##' @param asUsed Plot image as read; i.e. transformed
+##' @param ask Ask before plotting next contour?
 ##' @param ... further arguments
 ##' @return nothing
 ##' @author Christoffer Moesgaard Albertsen
 ##' @method plot otolith_contour_list
 ##' @export
 plot.otolith_contour_list<- function(x,asUsed = FALSE, ask = TRUE, ...){
-    oldAsk <- par("ask")
-    par(ask = ask)
-    for(i in 1:length(x))
-        plot(x[[i]], asUsed = asUsed, ...)
-    par(ask = oldAsk)
+    oldAsk <- graphics::par("ask")
+    graphics::plot(x[[1]], asUsed = asUsed, ...)
+    graphics::par(ask = ask)
+    if(length(x) > 1)
+        for(i in 2:length(x))
+            graphics::plot(x[[i]], asUsed = asUsed, ...)
+    graphics::par(ask = oldAsk)
 }
-

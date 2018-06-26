@@ -7,6 +7,7 @@
 #include "../inst/include/convol.hpp"
 #include "../inst/include/efd.hpp"
 #include "../inst/include/knn.hpp"
+#include "../inst/include/polygon.hpp"
 
 #define install Rf_install
 #define findVar Rf_findVar
@@ -38,7 +39,9 @@ extern "C" {
     
     CALLDEF(convol2d,2),
     CALLDEF(knn,5),
-    CALLDEF(efd2coordSEXP,2),
+    CALLDEF(polygon_area,2),
+    CALLDEF(efd2coordSEXP,4),
+    CALLDEF(efd,3),
     {NULL,NULL,0}
   };
 

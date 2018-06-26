@@ -24,14 +24,34 @@ read_image(file, noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0.05
 
 \item{extreme}{Boolean value. Should pixel values be converted to 0/1?}
 
+\item{borderBasedCutOff}{Use a border based cut off?}
+
+\item{logisticTransform}{Do logistic transformation of image?}
+
+\item{logisticTransformLocation}{Location parameter for logistic transformation}
+
+\item{logisticTransformScale}{Scale parameter for logistic transformation}
+
+\item{gaussianBlur}{Do Gaussian blur of image?}
+
+\item{gaussianBlurSize}{Size (n x n) for Gaussian blur kernel}
+
+\item{gaussianBlurSigma}{Variance parameter of Gaussian distribution used to blur}
+
+\item{unsharp}{Do unsharp mask of image using the Gaussian blur arguments?}
+
 \item{pixelwise}{Boolean value. If TRUE, a pixel-wise algorithm is used to extract contours; otherwise, \code{grDevices::contourLines} is used.}
 
 \item{assignSinglesByPosition}{Should single otoliths be assigned to Left/Right based on position on image?}
 
 \item{minCountScale}{See details}
+
+\item{minCountForMax}{See details}
+
+\item{zeroCutOffPercent}{See details}
 }
 \value{
-otolith image information
+otolith image object
 }
 \description{
 Read Otolith Images and Extract Contours

@@ -2,16 +2,28 @@
 % Please edit documentation in R/efd.R
 \name{efd}
 \alias{efd}
+\alias{efd.matrix}
+\alias{efd.otolith_contour}
+\alias{efd.otolith_image}
+\alias{efd.otolith_contour_list}
 \title{Calculate Elliptical Fourier Descriptors}
 \usage{
-efd(dat, N, n = nrow(dat), returnAsList = FALSE, normalize = FALSE)
+efd(dat, N, ...)
+
+\method{efd}{matrix}(dat, N, returnAsList = FALSE, normalize = FALSE, ...)
+
+\method{efd}{otolith_contour}(dat, N, ...)
+
+\method{efd}{otolith_image}(dat, N, ...)
+
+\method{efd}{otolith_contour_list}(dat, N, ...)
 }
 \arguments{
-\item{dat}{contour_image object}
+\item{dat}{contour object}
 
 \item{N}{Number of harmonics to calculate}
 
-\item{n}{Number of data points in dat}
+\item{...}{other argiments}
 
 \item{returnAsList}{Should result be returned as a list that can be passed to \code{efd2coord}?}
 

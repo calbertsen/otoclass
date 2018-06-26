@@ -1,3 +1,21 @@
+##' Maximum Likelihood Linear Discrimination
+##'
+##' Equivalent to LDA
+##' @param train Matrix of training data (number of observations x number of features)
+##' @param group Factor of training groyps
+##' @param test Matrix of test data
+##' @param prior Prior probability of groups
+##' @param penalty p to use for Lp penalty. Zero is no penalty
+##' @param lambda Positive scalar factor for Lp penalty. Zero is no penalty.
+##' @param independent Should features be treated as independent?
+##' @param silent Should the TMB object be silent?
+##' @param control control parameters passes to nlminb
+##' @param ... Other parameters
+##' @return a list of the result
+##' @author Christoffer Moesgaard Albertsen
+##' @importFrom stats nlminb cor
+##' @importFrom methods as
+##' @importFrom TMB MakeADFun
 ##' @export
 mlld <- function(train, group, test,
                  prior = as.vector(table(group)) / length(group),
@@ -36,7 +54,7 @@ mlld <- function(train, group, test,
     if(independent){
         corcalc <- 0
     }else{
-        corcalc <- t(chol(cor(t(dat$X))))[lower.tri(t(chol(cor(t(dat$X)))),diag = FALSE)]
+        corcalc <- t(chol(stats::cor(t(dat$X))))[lower.tri(t(chol(stats::cor(t(dat$X)))),diag = FALSE)]
     }
     par <- list(mu = mn, ##matrix(0.0,nrow(dat$X),nlevels(dat$G)),
                 efd = matrix(0.0,0,0),

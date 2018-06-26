@@ -9,6 +9,10 @@
 \arguments{
 \item{x}{Otolith contour list}
 
+\item{asUsed}{Plot image as read; i.e. transformed}
+
+\item{ask}{Ask before plotting next contour?}
+
 \item{...}{further arguments}
 }
 \value{

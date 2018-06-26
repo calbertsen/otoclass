@@ -55,21 +55,18 @@ to01 <- function(x){
 }
 
 
-##' @export
 edge_detect <- function(pic){
     k2 <- matrix(c(-1,-1,-1,-1,8,-1,-1,-1,-1),3,3)
     r <- convol(pic,k2)
     return(r)
 }
 
-##' @export
 edge_detect2 <- function(pic){
     k2 <- matrix(c(1,0,-1,0,0,0,-1,0,1),3,3)
     r <- convol(pic,k2)
     return(r)
 }
 
-##' @export
 edge_detect3 <- function(pic){
     k2 <- matrix(c(0,1,0,1,-4,1,0,1,0),3,3)
     r <- convol(pic,k2)
@@ -77,7 +74,6 @@ edge_detect3 <- function(pic){
 }
 
 
-##' @export
 sobel <- function(pic){    
     k2 <- matrix(c(-1,-2,-1,0,0,0,1,2,1),3,3)
     r <- convol(pic,k2)
@@ -86,15 +82,15 @@ sobel <- function(pic){
 
 
 
-##' @export
+##' @importFrom stats median dnorm
 gaussian_blur <- function(pic,n = 3, sigma = 1){
-    xx <- 1:n - median(1:n)
-    k2 <- outer(xx,xx, function(x,y) dnorm(x,0,sigma) * dnorm(y,0,sigma))
+    xx <- 1:n - stats::median(1:n)
+    k2 <- outer(xx,xx, function(x,y) stats::dnorm(x,0,sigma) * stats::dnorm(y,0,sigma))
     r <- convol(pic,k2/sum(k2))
     return(r)
 }
 
-##' @export
+##' @importFrom stats median dnorm
 unsharpmask <- function(pic, n = 3, sigma = 1){
     ## k2 <- -1/256 * matrix(c(1,4,6,4,1,
     ##                         4,16,24,16,4,
@@ -102,29 +98,26 @@ unsharpmask <- function(pic, n = 3, sigma = 1){
     ##                         4,16,24,16,4,
     ##                         1,4,6,4,1),
     ##                       5,5, byrow = TRUE)
-    xx <- 1:n - median(1:n)
-    k2 <- outer(xx,xx, function(x,y) dnorm(x,0,sigma) * dnorm(y,0,sigma))
+    xx <- 1:n - stats::median(1:n)
+    k2 <- outer(xx,xx, function(x,y) stats::dnorm(x,0,sigma) * stats::dnorm(y,0,sigma))
     s <- sum(k2)
-    k2[median(1:n),median(1:n)] <- k2[median(1:n),median(1:n)] - 2 * s
+    k2[stats::median(1:n),stats::median(1:n)] <- k2[stats::median(1:n),stats::median(1:n)] - 2 * s
     r <- convol(pic,-k2/s)
     return(r) ## round(plogis(r-mean(r)) * 255)
 }
 
-##' @export
 highpass <- function(pic){
     k2 <- matrix(c(0,-1/4,0,-1/4,2,-1/4,0,-1/4,0),3,3)
     r <- convol(pic,k2)
     return(r)
 }
 
-##' @export
 meanfilter <- function(pic){
     k2 <- matrix(1/9,3,3)
     r <- convol(pic,k2)
     return(r)
 }
 
-##' @export
 lowpass <- function(pic){
     k2 <- matrix(c(0,1/8,0,1/8,1/2,1/8,0,1/8,0),3,3)
     r <- convol(pic,k2)
@@ -132,7 +125,6 @@ lowpass <- function(pic){
 }
 
 
-##' @export
 emboss <- function(pic){
     k2 <- matrix(c(-2,-1,0,-1,1,1,0,1,2),3,3)
     r <- convol(pic,k2)

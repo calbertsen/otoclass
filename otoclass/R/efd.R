@@ -1,10 +1,10 @@
 ##' Calculate Elliptical Fourier Descriptors
 ##'
-##' @param dat contour_image object
+##' @param dat contour object 
 ##' @param N Number of harmonics to calculate
-##' @param n Number of data points in dat
 ##' @param returnAsList Should result be returned as a list that can be passed to \code{efd2coord}?
 ##' @param normalize Normalize using method from Ferson et al. 1985?
+##' @param ... other argiments
 ##' @return List of elliptical fourier descriptors
 ##' @author Christoffer Moesgaard Albertsen
 ##' @references Kuhl, F. P., Giardina, C. R. (1981) Elliptic Fourier Features of a Closed Contour. Computer Graphics and Image Processing. 18:236-258
@@ -22,14 +22,120 @@
 ##' efd(Ellipsis(pi/2),1,normalize = TRUE)
 ##'
 ##' efd(Ellipsis(-pi/2),1,normalize = TRUE)
-##' 
+##'
 ##' @export
-efd <- function(dat,N,n=nrow(dat),returnAsList=FALSE, normalize = FALSE){
+efd <- function(dat, N, ...){
+    UseMethod("efd")
+}
+
+##' @rdname efd
+##' @method efd matrix
+##' @export
+efd.matrix <- function(dat, N, returnAsList = FALSE, normalize = FALSE, ...){
+    if(!all(dat[1,] == dat[nrow(dat),]))
+        dat <- rbind(dat,dat[1,])
+    res <- .Call("efd", dat = dat, N = as.integer(N), normalize = normalize, PACKAGE="otoclass")
+    names(res$A0) <- "A0"
+    names(res$C0) <- "C0"
+    names(res$A) <- paste0("A",1:N)
+    names(res$B) <- paste0("B",1:N)
+    names(res$C) <- paste0("C",1:N)
+    names(res$D) <- paste0("D",1:N)
+
+    if(returnAsList){
+        return(res)
+    }else{
+        names(res) <- NULL
+        return(unlist(res))
+    }
+}
+
+
+##' @rdname efd
+##' @method efd otolith_contour
+##' @export
+efd.otolith_contour <- function(dat, N, ...){
+    efd.matrix(dat = dat, N = N, ...)
+}
+
+##' @rdname efd
+##' @method efd otolith_image
+##' @export
+efd.otolith_image <- function(dat, N, ...){
+    lres <- lapply(dat, efd, N=N, ...)
+}
+
+##' @rdname efd
+##' @method efd otolith_contour_list
+##' @export
+efd.otolith_contour_list <- function(dat, N, ...){
+    lres <- lapply(dat, efd, N=N, ...)    
+}
+
+##' Calculate XY-coordinates from Elliptical Fourier Descriptors
+##'
+##' @param n Number of coordinates to calculate
+##' @param A A EFD coefficients
+##' @param B B EFD coefficients
+##' @param C C EFD coefficients
+##' @param D D EFD coefficients
+##' @param A0 A0 EFD coefficients
+##' @param C0 C0 EFD coefficients
+##' @return Matrix of coordinates
+##' @author Christoffer Moesgaard Albertsen
+efd2coordOld <- function(n,A,B,C,D,A0=0,C0=0){
     tt <- seq(0,1,len=n)
     T <- tt[length(tt)]
+    x <- A0 + sapply(tt,function(t)sum(A*cos(2*1:length(A)*pi*t/T)+B*sin(2*1:length(A)*pi*t/T)))
+    y <- C0 + sapply(tt,function(t)sum(C*cos(2*1:length(A)*pi*t/T)+D*sin(2*1:length(A)*pi*t/T)))
+    return(cbind(x,y))
+}
+
+
+##' Calculate XY-coordinates from Elliptical Fourier Descriptors
+##'
+##' @param n Number of coordinates to calculate
+##' @param A A EFD coefficients
+##' @param B B EFD coefficients
+##' @param C C EFD coefficients
+##' @param D D EFD coefficients
+##' @param A0 A0 EFD coefficients
+##' @param C0 C0 EFD coefficients
+##' @return Matrix of coordinates
+##' @author Christoffer Moesgaard Albertsen
+##' @export
+efd2coord <- function(n,A,B,C,D,A0=0,C0=0){
+    coords <- .Call("efd2coordSEXP",
+                    efd = cbind(A,B,C,D),
+                    N=as.integer(n),
+                    A0 = A0,
+                    C0 = C0,
+                    PACKAGE = "otoclass")
+    return(coords)
+}
+
+
+ Ellipsis <- function(theta,r1=1,r2=2,len=100, x0=0,y0=0){
+   xx <- seq(0,2*pi,len=len)
+   X <- cbind(r1*cos(xx),r2*sin(xx))
+   R <- matrix(c(cos(theta),sin(theta),-sin(theta),cos(theta)),2,2)
+   Y <- t(apply(X,1,function(x) as.vector(R %*% x))) + matrix(c(x0,y0),len,2, byrow=TRUE)
+   return(Y)
+ }
+
+## xx <- Ellipsis(pi/2) + matrix(c(-2,5),100,2,byrow=TRUE)
+## .Call("efd",xx,1L,FALSE,PACKAGE="otoclass")
+
+efdOld <- function(dat, N, returnAsList=FALSE, normalize = FALSE){
+    if(!all(dat[1,] == dat[nrow(dat),]))
+        dat <- rbind(dat,dat[1,])
+    n <- nrow(dat)
+ 
     dx <- diff(dat[,1])
     dy <- diff(dat[,2])
-    dt <- diff(tt)
+    dt <- sqrt(dx^2 + dy^2)
+    tt <- c(0,cumsum(dt))
+    T <- tail(tt,1)
     a <- Vectorize(function(n){
         T/(2*n^2*pi^2)*sum(dx/dt*(cos(2*n*pi*tt[-1]/T)-cos(2*n*pi*tt[-length(tt)]/T)))
     })
@@ -87,43 +193,4 @@ efd <- function(dat,N,n=nrow(dat),returnAsList=FALSE, normalize = FALSE){
         names(res) <- NULL
         return(unlist(res))
     }
-}
-
-##' Calculate XY-coordinates from Elliptical Fourier Descriptors
-##'
-##' @param n Number of coordinates to calculate
-##' @param A A EFD coefficients
-##' @param B B EFD coefficients
-##' @param C C EFD coefficients
-##' @param D D EFD coefficients
-##' @param A0 A0 EFD coefficients
-##' @param C0 C0 EFD coefficients
-##' @return Matrix of coordinates
-##' @author Christoffer Moesgaard Albertsen
-##' @export
-efd2coord <- function(n,A,B,C,D,A0=0,C0=0){
-    tt <- seq(0,1,len=n)
-    T <- tt[length(tt)]
-    x <- A0 + sapply(tt,function(t)sum(A*cos(2*1:length(A)*pi*t/T)+B*sin(2*1:length(A)*pi*t/T)))
-    y <- C0 + sapply(tt,function(t)sum(C*cos(2*1:length(A)*pi*t/T)+D*sin(2*1:length(A)*pi*t/T)))
-    return(cbind(x,y))
-}
-
-
-##' Calculate XY-coordinates from Elliptical Fourier Descriptors
-##'
-##' @param n Number of coordinates to calculate
-##' @param A A EFD coefficients
-##' @param B B EFD coefficients
-##' @param C C EFD coefficients
-##' @param D D EFD coefficients
-##' @param A0 A0 EFD coefficients
-##' @param C0 C0 EFD coefficients
-##' @return Matrix of coordinates
-##' @author Christoffer Moesgaard Albertsen
-efd2coordSEXP <- function(n,A,B,C,D,A0=0,C0=0){
-    coords <- .Call("efd2coordSEXP", efd = rbind(A,B,C,D), N=n, PACKAGE = "otoclass")
-    x <- A0 + coords[1,]
-    y <- C0 + coords[2,]
-    return(cbind(x,y))
 }

@@ -2,7 +2,7 @@
 
 double distance(doubleVector x, doubleVector y,int type){
 
-  double ans;
+  double ans = 0.0;
   doubleVector z = x-y;
   
   switch(type){

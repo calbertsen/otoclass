@@ -4,7 +4,7 @@
 \alias{print.otolith_image}
 \title{Print otolith image}
 \usage{
-\method{print}{otolith_contour}(x, ...)
+\method{print}{otolith_image}(x, ...)
 }
 \arguments{
 \item{x}{Otolith image}

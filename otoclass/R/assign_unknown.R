@@ -16,7 +16,7 @@ assign_unknown <- function(nimList,
                            lambda=1,
                            link = "probit",
                            normalize_efd = FALSE){
-    efds <- do.call("rbind",lapply(nimList,efd,N=N,returnAsList=FALSE, normalize = normalize_efd))
+    efds <- do.call("rbind",efd(nimList,N=N,returnAsList=FALSE, normalize = normalize_efd))
     efds <- efds[,!(colnames(efds) %in% c("A0","C0")), drop = FALSE]
     if(normalize_efd)
         efds <- efds[,!(colnames(efds) %in% c("A1","B1","C1")), drop = FALSE]

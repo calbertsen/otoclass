@@ -9,6 +9,8 @@
 \arguments{
 \item{x}{Otolith contour}
 
+\item{asUsed}{Plot image as read; i.e. transformed}
+
 \item{...}{further arguments}
 }
 \value{

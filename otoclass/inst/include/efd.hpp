@@ -13,5 +13,6 @@ template<class Type>
 Matrix<Type, Dynamic, Dynamic> efd2coord_work(Matrix<Type, Dynamic, Dynamic> efd, int N);
 
 extern "C" {
-  SEXP efd2coordSEXP(SEXP efd, SEXP N);
+  SEXP efd2coordSEXP(SEXP efd, SEXP N, SEXP A0, SEXP C0);
+  SEXP efd(SEXP dat, SEXP N, SEXP normalize);
 }

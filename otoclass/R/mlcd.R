@@ -1,4 +1,4 @@
-
+##' @importFrom Matrix sparseMatrix diag
 contourQ <- function(N, delta = 0){
     pnts <- c(1,1,2)
     t <- seq(0,1,len = N)
@@ -19,8 +19,24 @@ contourQ <- function(N, delta = 0){
 }
 
 
-
-
+##' Maximum Likelihood Contour Discrimination
+##'
+##' @param train 3D Array of training data (2 x number of contour points x number of observations) 
+##' @param group Factor of training groups
+##' @param test 3D array of test data
+##' @param prior Prior probability of groups
+##' @param penalty p to use for Lp penalty. Zero is no penalty.
+##' @param lambda Positive scalar factor for Lp penalty. Zero is no penalty.
+##' @param Nefd Number of EFDs to use for mean otolith
+##' @param correlatedCoordinates Should coordinates be correlated?
+##' @param equalVariance Should the variance be equal in the two coordinates?
+##' @param silent Should the TMB object be silent?
+##' @param control control parameters passes to nlminb
+##' @param ... Other parameters
+##' @return a list of the result
+##' @author Christoffer Moesgaard Albertsen
+##' @importFrom stats runif nlminb
+##' @importFrom TMB MakeADFun
 ##' @export
 mlcd <- function(train, group, test,
                  prior = as.vector(table(group)) / length(group),
@@ -60,7 +76,7 @@ mlcd <- function(train, group, test,
     ## Efds
     n <- nrow(dat$X)
     efds <- array(0,dim = c(4,Nefd,nlevels(dat$G)))
-    efds[] <- runif(prod(dim(efds)),-0.01,0.01)
+    efds[] <- stats::runif(prod(dim(efds)),-0.01,0.01)
     efds[1,1,] <- 1
     efds[2:3,1,] <- 0
     efds[4,1,] <- 1

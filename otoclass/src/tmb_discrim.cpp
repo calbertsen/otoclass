@@ -36,10 +36,10 @@ namespace Model{
   enum Types {
     Independent,
     Unstructured,
-    GMRF
+    GMRF,
+    RotatingOU
   };
 }
-
 
 
 template<class Type>
@@ -115,8 +115,10 @@ Type objective_function<Type>::operator() () {
   DATA_SCALAR(logLambda); DATA_UPDATE(logLambda);
   DATA_VECTOR(prior);
   DATA_ARRAY(X_pred);
+  DATA_SPARSE_MATRIX(covar);
+  DATA_SPARSE_MATRIX(covar_pred);
 
-  PARAMETER_MATRIX(mu);
+  PARAMETER_ARRAY(mu);
   PARAMETER_ARRAY(efd);
   PARAMETER_MATRIX(logSigma);
   PARAMETER_MATRIX(corpar);
@@ -147,7 +149,7 @@ Type objective_function<Type>::operator() () {
   meanCoords.setZero();
   if(efd.cols() > 0){
     for(int i = 0; i < NLEVELS(G); ++i){
-      coords(i) = efd2coord(efd.col(i).matrix(), X.dim[1]);
+      coords(i) = efd2coord(efd.col(i).matrix(), X.dim[1]); // Add something to account for length etc.
       meanCoords += coords(i);
     }
     meanCoords /= (Type)NLEVELS(G);
@@ -164,10 +166,10 @@ Type objective_function<Type>::operator() () {
     array<Type> tmp = X.col(i);
     switch(modelType) {
     case Model::Independent:
-      tmp -= (vector<Type>)mu.col(G(i));
+      tmp -= (vector<Type>)(covar.col(i).transpose() * mu.col(G(i)).matrix());
       break;
     case Model::Unstructured:
-      tmp -= (vector<Type>)mu.col(G(i));
+      tmp -= (vector<Type>)(covar.col(i).transpose() * mu.col(G(i)).matrix());
       break;
     case Model::GMRF:
       tmp -= coords(G(i)).array();
@@ -182,20 +184,37 @@ Type objective_function<Type>::operator() () {
 
 
   // Penalty
-  // vector<Type> muCMean = mu.colwise().mean();
-  vector<Type> muRMean = mu.rowwise().mean();
+  // vector<Type> muRMean = mu.rowwise().mean();
   if(penalty > 0){
+
+    array<Type> muCMean(mu.dim[0],mu.dim[1]); // Mean over groups
+    muCMean.setZero();
+    for(int k = 0; k < mu.dim[2]; ++k)
+      muCMean += mu.col(k);
+    muCMean /= mu.dim[2];
+    
     Type normR = 0.0;
+    Type normC = 0.0;
+
     //Type normC = 0.0;
     // Penalty if mu is used
-    for(int i = 0; i < mu.rows(); ++i)
-      for(int j = 0; j < mu.cols(); ++j){
-	normR += pow(sigma(i,j) * abs(mu(i,j) - muRMean(j)), penalty);
-	//normC += pow(sigma(i,j) * abs(mu(i,j) - muCMean(j)), penalty);
+    for(int i = 0; i < mu.dim[0]; ++i)
+      for(int j = 0; j < mu.dim[1]; ++j){
+	normC += pow(abs(muCMean(i,j)), penalty);
+	for(int k = 0; k < mu.dim[2]; ++k){
+	  normR += pow(abs(mu(i,j,k) - muCMean(i,j)), penalty); // sigma(i,j) *
+	  //normR += pow(abs(mu(i,j,k)), penalty); // sigma(i,j) *
+	}
       }
     nll += lambda * pow(normR, 1.0/(double)penalty);
-    //nll += lambda * pow(normC, 1.0/(double)penalty);
+    nll += lambda * pow(normC, 1.0/(double)penalty);
 
+    // Type normCor = 0.0;
+    // for(int j = 0; j < corpar.cols(); ++j)
+    //   for(int i = 0; i < corpar.rows(); ++i)
+    // 	normCor += pow(abs(corpar(i,j)), penalty);
+    // nll += lambda * pow(normCor, 1.0/(double)penalty);
+    
     // Penalty if efd is used
     if(efd.cols() > 0){
       for(int j = 0; j < NLEVELS(G); ++j){
@@ -229,10 +248,10 @@ Type objective_function<Type>::operator() () {
       tmpPred = X_pred.col(i);
       switch(modelType) {
       case Model::Independent:
-        tmpPred -= (vector<Type>)mu.col(j);
+        tmpPred -= (vector<Type>)(covar_pred.col(i).transpose() * mu.col(j).matrix());
 	break;
       case Model::Unstructured:
-	tmpPred -= (vector<Type>)mu.col(j);
+	tmpPred -= (vector<Type>)(covar_pred.col(i).transpose() * mu.col(j).matrix());
 	break;
       case Model::GMRF:
         tmpPred -= coords(j).array();

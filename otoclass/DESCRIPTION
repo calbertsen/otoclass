@@ -1,9 +1,11 @@
 Package: otoclass
 Type: Package
 Title: Otolith Classification and Proportion Estimation
-Version: 0.1.0
+Version: 0.2.0
 Date: 2018-06-26
-Author: Christoffer Moesgaard Albertsen
+Authors@R: person(c("Christoffer","Moesgaard"), "Albertsen",
+	   email = "cmoe@aqua.dtu.dk", role = c("aut", "cre"),
+	   comment = c(ORCID = "0000-0003-0088-4363"))
 Maintainer: Christoffer Moesgaard Albertsen <cmoe@aqua.dtu.dk>
 Description: Methods for classification and analysis of
     otoliths along with methods for estimating species proportions in samples.

@@ -6,7 +6,8 @@
 \usage{
 mlld(train, group, test, prior = as.vector(table(group))/length(group),
   penalty = 0, lambda = 0.4, independent = FALSE, silent = FALSE,
-  control = list(iter.max = 1e+05, eval.max = 1e+05), ...)
+  control = list(iter.max = 1e+05, eval.max = 1e+05), formula = NULL,
+  data = NULL, dataTest = NULL, ...)
 }
 \arguments{
 \item{train}{Matrix of training data (number of observations x number of features)}

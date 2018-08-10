@@ -70,7 +70,9 @@ mlcd <- function(train, group, test,
                 penalty = penalty,
                 prior = prior,
                 X_pred = test,
-                logLambda = log(lambda)
+                logLambda = log(lambda),
+                covar = matrix(0,0,0),
+                covar_pred = matrix(0,0,0)
                 )
 ##### Parameters for TMB #####
     ## Efds

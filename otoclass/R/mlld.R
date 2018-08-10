@@ -24,18 +24,43 @@ mlld <- function(train, group, test,
                  independent = FALSE,
                  silent = FALSE,                 
                  control = list(iter.max = 100000, eval.max = 100000),
+                 formula = NULL,
+                 data = NULL,
+                 dataTest = NULL,
                  ...){
 ##### Checks #####
+    if(missing(test))
+        test <- train
     ## 1) test/train should be a matrix
-    ## 2) first dimension of test/train should be same as length of group)
+    ## 2) second dimension of test/train should be same as length of group)
     ## 3) Group should be a factor
     if(!is.factor(group))
         group <- factor(group)
     ## 4) prior should be same length as number of groups
 
+    
 ##### Prepare Q #####
     N <- dim(train)[2]                 
     Q <- methods::as(matrix(0.0,0,0),"sparseMatrix")
+
+##### Prepare covar #####
+    if(!is.null(formula)){
+        if(is.null(data))
+            data <- as.data.frame(train)
+        if(is.null(dataTest))
+            dataTest <- as.data.frame(test)
+        covar <- Matrix::sparse.model.matrix(formula,
+                                             data = data,
+                                             transpose = TRUE,
+                                             row.names = FALSE)
+        covarTest <- Matrix::sparse.model.matrix(formula,
+                                             data = dataTest,
+                                             transpose = TRUE,
+                                             row.names = FALSE)
+    }else{
+        covar <- methods::as(matrix(1.0,1,nrow(train)),"sparseMatrix")
+        covarTest <- methods::as(matrix(1.0,1,nrow(test)),"sparseMatrix")
+    }
 
 ##### Data for TMB #####
     dat <- list(model = ifelse(independent,0L,1L),
@@ -45,12 +70,15 @@ mlld <- function(train, group, test,
                 penalty = penalty,
                 prior = prior,
                 X_pred = t(test),
-                logLambda = log(lambda)
+                logLambda = log(lambda),
+                covar = covar,
+                covar_pred = covarTest
                 )
 ##### Parameters for TMB #####
     n <- nrow(dat$X)
     ## par list
-    mn <- sapply(levels(dat$G),function(i)apply(dat$X[,dat$G==i,drop=FALSE],1,mean))
+    mn <- array(0, dim = c(nrow(dat$covar), nrow(dat$X), nlevels(dat$G)))
+    ##mn <- sapply(levels(dat$G),function(i)apply(dat$X[,dat$G==i,drop=FALSE],1,mean))
     if(independent){
         corcalc <- 0
     }else{
@@ -62,6 +90,7 @@ mlld <- function(train, group, test,
                 corpar = matrix(corcalc,(n*n-n)/2,nlevels(dat$G)),
                 logDelta = 0
                 )
+    np <- Reduce("+",lapply(par,length))
 ##### Map for TMB #####
     ## normalized efd: in first harmonic 3 variables are degenerate
     ## variance parameter map
@@ -75,6 +104,9 @@ mlld <- function(train, group, test,
                 corpar = corparMap,
                 logDelta = factor(NA)
                 )
+    npfix <- Reduce("+",lapply(map,function(x)sum(is.na(x))))
+    if(np-npfix > nrow(train) / 10)
+        warning(sprintf("The model has %s parameters with only %s observations - %.2f observations per parameter. There is a high risk of overfitting.",np-npfix,nrow(train),nrow(train)/(np-npfix))) 
 
 ##### Make TMB object #####
     obj <- TMB::MakeADFun(dat,par,map,

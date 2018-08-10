@@ -4,7 +4,8 @@
 \alias{fcbf}
 \title{Fast Correlation Based Filter for Feature Selection in High-Dimensional Data}
 \usage{
-fcbf(train, group, delta, lambda = 1)
+fcbf(train, group, delta, lambda = 1, nCuts = function(x) {    
+  round(length(unique(x))/5) })
 }
 \arguments{
 \item{train}{A matrix of training data}
@@ -14,6 +15,8 @@ fcbf(train, group, delta, lambda = 1)
 \item{delta}{Tuning parameter}
 
 \item{lambda}{Tuning parameter}
+
+\item{nCuts}{Function that calculates number of bins used for calculating correlations}
 }
 \value{
 A vector of selected features

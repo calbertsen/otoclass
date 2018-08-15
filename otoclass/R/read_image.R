@@ -82,7 +82,7 @@ flip_image <- function(dat,datCompare,forceFlip=FALSE, coord = 2){
     mid <- mean(range(dat2[,coord]))
     dat2[,coord] <- mid - (dat2[,coord] - mid)
     dat2 <-  newStart_image(dat2)
-    attr(dat2,"Flipped") <- TRUE
+    attr(dat2,"Flipped")[coord] <- !attr(dat2,"Flipped")[coord]
 
     if(forceFlip)
         return(dat2)
@@ -339,7 +339,8 @@ read_image<- function(file,
         attr(res[[i]],"UnsharpMask") <- list(used = unsharp)
         attr(res[[i]],"ImagePixels") <- c(nc,nr)
         attr(res[[i]],"Normalized") <- FALSE
-        attr(res[[i]],"Flipped") <- FALSE
+        attr(res[[i]],"Flipped") <- c(FALSE,FALSE)
+        attr(res[[i]],"Rotated") <- 0
         attr(res[[i]],"Area") <- polygon_area(res[[i]])
         class(res[[i]]) <- "otolith_contour"
     }

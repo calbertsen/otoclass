@@ -5,9 +5,9 @@
 \title{Maximum Likelihood Linear Discrimination}
 \usage{
 mlld(train, group, test, prior = as.vector(table(group))/length(group),
-  penalty = 0, lambda = 0.4, independent = FALSE, silent = FALSE,
-  control = list(iter.max = 1e+05, eval.max = 1e+05), formula = NULL,
-  data = NULL, dataTest = NULL, ...)
+  penalty = 0, lambda = rep(0.4, 3), independent = FALSE,
+  silent = FALSE, control = list(iter.max = 1e+05, eval.max = 1e+05),
+  formula = NULL, data = NULL, dataTest = NULL, ...)
 }
 \arguments{
 \item{train}{Matrix of training data (number of observations x number of features)}
@@ -20,13 +20,19 @@ mlld(train, group, test, prior = as.vector(table(group))/length(group),
 
 \item{penalty}{p to use for Lp penalty. Zero is no penalty}
 
-\item{lambda}{Positive scalar factor for Lp penalty. Zero is no penalty.}
+\item{lambda}{Positive numeric vector factor for Lp penalty. Zero is no penalty. The first element determines the penalty on group differences, the second element determines the penalty on absolute parameter values, and the third element determines the penalty on correlation parameters.}
 
 \item{independent}{Should features be treated as independent?}
 
 \item{silent}{Should the TMB object be silent?}
 
 \item{control}{control parameters passes to nlminb}
+
+\item{formula}{Formula to account for in the linear discrimination}
+
+\item{data}{Covariates for training data}
+
+\item{dataTest}{Covariates for testing data}
 
 \item{...}{Other parameters}
 }

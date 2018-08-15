@@ -109,3 +109,6 @@ plot.otolith_contour_list<- function(x,asUsed = FALSE, ask = TRUE, ...){
             graphics::plot(x[[i]], asUsed = asUsed, ...)
     graphics::par(ask = oldAsk)
 }
+
+
+

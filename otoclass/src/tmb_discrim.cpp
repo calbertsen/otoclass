@@ -112,7 +112,7 @@ Type objective_function<Type>::operator() () {
   Model::Types modelType = static_cast<Model::Types>(model);
   
   DATA_INTEGER(penalty);
-  DATA_SCALAR(logLambda); DATA_UPDATE(logLambda);
+  DATA_VECTOR(logLambda);// DATA_UPDATE(logLambda);
   DATA_VECTOR(prior);
   DATA_ARRAY(X_pred);
   DATA_SPARSE_MATRIX(covar);
@@ -127,7 +127,7 @@ Type objective_function<Type>::operator() () {
 
   Type scale = X.dim.prod();
   
-  Type lambda = exp(logLambda);
+  vector<Type> lambda = logLambda.exp();
   vector<Type> delta = logDelta.exp();
 
   matrix<Type> sigma(logSigma.rows(), logSigma.cols());
@@ -192,6 +192,8 @@ Type objective_function<Type>::operator() () {
     for(int k = 0; k < mu.dim[2]; ++k)
       muCMean += mu.col(k);
     muCMean /= mu.dim[2];
+
+    REPORT(muCMean);
     
     Type normR = 0.0;
     Type normC = 0.0;
@@ -206,14 +208,14 @@ Type objective_function<Type>::operator() () {
 	  //normR += pow(abs(mu(i,j,k)), penalty); // sigma(i,j) *
 	}
       }
-    nll += lambda * pow(normR, 1.0/(double)penalty);
-    nll += lambda * pow(normC, 1.0/(double)penalty);
+    nll += lambda(0) * pow(normR, 1.0/(double)penalty);
+    nll += lambda(1) * pow(normC, 1.0/(double)penalty);
 
-    // Type normCor = 0.0;
-    // for(int j = 0; j < corpar.cols(); ++j)
-    //   for(int i = 0; i < corpar.rows(); ++i)
-    // 	normCor += pow(abs(corpar(i,j)), penalty);
-    // nll += lambda * pow(normCor, 1.0/(double)penalty);
+    Type normCor = 0.0;
+    for(int j = 0; j < corpar.cols(); ++j)
+      for(int i = 0; i < corpar.rows(); ++i)
+    	normCor += pow(abs(corpar(i,j)), penalty);
+    nll += lambda(2) * pow(normCor, 1.0/(double)penalty);
     
     // Penalty if efd is used
     if(efd.cols() > 0){
@@ -232,7 +234,7 @@ Type objective_function<Type>::operator() () {
 	  }
 	  if(cc == 3)
 	    norm += pow(abs(efd(cc,0,j)), penalty); 
-	  nll += lambda * pow(norm, 1.0/(double)penalty);	  
+	  nll += lambda(0) * pow(norm, 1.0/(double)penalty);	  
 	}
       }
     }

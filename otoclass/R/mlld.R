@@ -6,10 +6,13 @@
 ##' @param test Matrix of test data
 ##' @param prior Prior probability of groups
 ##' @param penalty p to use for Lp penalty. Zero is no penalty
-##' @param lambda Positive scalar factor for Lp penalty. Zero is no penalty.
+##' @param lambda Positive numeric vector factor for Lp penalty. Zero is no penalty. The first element determines the penalty on group differences, the second element determines the penalty on absolute parameter values, and the third element determines the penalty on correlation parameters.
 ##' @param independent Should features be treated as independent?
 ##' @param silent Should the TMB object be silent?
 ##' @param control control parameters passes to nlminb
+##' @param formula Formula to account for in the linear discrimination
+##' @param data Covariates for training data
+##' @param dataTest Covariates for testing data
 ##' @param ... Other parameters
 ##' @return a list of the result
 ##' @author Christoffer Moesgaard Albertsen
@@ -20,7 +23,7 @@
 mlld <- function(train, group, test,
                  prior = as.vector(table(group)) / length(group),
                  penalty = 0,
-                 lambda = 0.4,
+                 lambda = rep(0.4,3),
                  independent = FALSE,
                  silent = FALSE,                 
                  control = list(iter.max = 100000, eval.max = 100000),
@@ -37,7 +40,14 @@ mlld <- function(train, group, test,
     if(!is.factor(group))
         group <- factor(group)
     ## 4) prior should be same length as number of groups
-
+    if(length(lambda) != 3){
+        warning(sprintf("lambda should be a vector of length 3. %s",
+                        ifelse(length(lambda) > 3,
+                               "The values have been repeated.",
+                               "The first three elements are used.")
+                        ))
+        lambda <- rep(lambda,length = 3)
+    }        
     
 ##### Prepare Q #####
     N <- dim(train)[2]                 
@@ -49,6 +59,10 @@ mlld <- function(train, group, test,
             data <- as.data.frame(train)
         if(is.null(dataTest))
             dataTest <- as.data.frame(test)
+        if(!identical(nrow(train), nrow(data)))
+            stop("data and train must have the same number of rows.")
+        if(!identical(nrow(test), nrow(dataTest)))
+            stop("dataTest and test must have the same number of rows.")
         covar <- Matrix::sparse.model.matrix(formula,
                                              data = data,
                                              transpose = TRUE,

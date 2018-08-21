@@ -40,7 +40,7 @@ extern "C" {
       rcoord[i + NN * 0] = REAL(A0)[0];
       rcoord[i + NN * 1] = REAL(C0)[0];
       for(int j = 0; j < NE; ++j){
-	double tmp = 2.0 * (j + 1.0) * M_PI * i / (double)(NN-1);
+	double tmp = 2.0 * ((double)j + 1.0) * M_PI * (double)i / (double)(NN-1);
 	rcoord[i + NN * 0] += refd[j + NE * 0] * cos(tmp);
 	rcoord[i + NN * 0] += refd[j + NE * 1] * sin(tmp);
 	rcoord[i + NN * 1] += refd[j + NE * 2] * cos(tmp);
@@ -108,23 +108,24 @@ extern "C" {
     //double dy = pd[j + nr * 1] - pd[j-1 + nr * 1];
     double dy = rDat[j + nr * 1] - rDat[j-1 + nr * 1];
     double dt = sqrt(dx*dx + dy*dy);
-    if(dt > 1e-16){
-      t += dt;
-      // REAL(A0)[0] += 0.5 * dx / dt * (t*t - tm1*tm1) + (pd[j-1 + nr * 0] - dx / dt * tm1) * dt;
-      // REAL(C0)[0] += 0.5 * dy / dt * (t*t - tm1*tm1) + (pd[j-1 + nr * 1] - dy / dt * tm1) * dt;
-      REAL(A0)[0] += 0.5 * dx / dt * (t*t - tm1*tm1) + (rDat[j-1 + nr * 0] - dx / dt * tm1) * dt;
-      REAL(C0)[0] += 0.5 * dy / dt * (t*t - tm1*tm1) + (rDat[j-1 + nr * 1] - dy / dt * tm1) * dt;
-      for(int i = 1; i <= NN; ++i){
-	double f = T / ((double)i*(double)i * M_PI_SQ_2);
-	double pi2i1 = 2.0 * i * M_PI * t / T;
-	double pi2i2 = 2.0 * i * M_PI * tm1 / T;
-	rA[i-1] += f * dx / dt * ( cos( pi2i1 ) - cos( pi2i2 ) );
-	rB[i-1] += f * dx / dt * ( sin( pi2i1 ) - sin( pi2i2 ) );
-	rC[i-1] += f * dy / dt * ( cos( pi2i1 ) - cos( pi2i2 ) );
-	rD[i-1] += f * dy / dt * ( sin( pi2i1 ) - sin( pi2i2 ) );
-      }
-      tm1 += dt;
+    //if(dt > 0){
+    t += dt;
+    // REAL(A0)[0] += 0.5 * dx / dt * (t*t - tm1*tm1) + (pd[j-1 + nr * 0] - dx / dt * tm1) * dt;
+    // REAL(C0)[0] += 0.5 * dy / dt * (t*t - tm1*tm1) + (pd[j-1 + nr * 1] - dy / dt * tm1) * dt;
+    REAL(A0)[0] += 0.5 * dx / dt * (t*t - tm1*tm1) + (rDat[j-1 + nr * 0] - dx / dt * tm1) * dt;
+    REAL(C0)[0] += 0.5 * dy / dt * (t*t - tm1*tm1) + (rDat[j-1 + nr * 1] - dy / dt * tm1) * dt;
+    for(int i = 1; i <= NN; ++i){
+      double f = T / ((double)i*(double)i * M_PI_SQ_2);
+      double di = i;
+      double pi2i1 = 2.0 * di * M_PI * t / T;
+      double pi2i2 = 2.0 * di * M_PI * tm1 / T;
+      rA[i-1] += f * dx / dt * ( cos( pi2i1 ) - cos( pi2i2 ) );
+      rB[i-1] += f * dx / dt * ( sin( pi2i1 ) - sin( pi2i2 ) );
+      rC[i-1] += f * dy / dt * ( cos( pi2i1 ) - cos( pi2i2 ) );
+      rD[i-1] += f * dy / dt * ( sin( pi2i1 ) - sin( pi2i2 ) );
     }
+    tm1 += dt;
+    //}
   }
   REAL(A0)[0] /= T;
   REAL(C0)[0] /= T;
@@ -142,8 +143,9 @@ extern "C" {
     double sp = sin(phi);
     
     for(int i = 1; i <= NN; ++i){
-      double cit = cos(theta * i);
-      double sit = sin(theta * i);
+      double di = i;
+      double cit = cos(theta * di);
+      double sit = sin(theta * di);
       double Ai = rA[i-1];
       double Bi = rB[i-1];
       double Ci = rC[i-1];

@@ -32,9 +32,13 @@ efd <- function(dat, N, ...){
 ##' @method efd matrix
 ##' @export
 efd.matrix <- function(dat, N, returnAsList = FALSE, normalize = FALSE, ...){
-    if(!all(dat[1,] == dat[nrow(dat),]))
+    if(!isTRUE(all.equal(dat[1,],dat[nrow(dat),])))
         dat <- rbind(dat,dat[1,])
-    res <- .Call("efd", dat = dat, N = as.integer(N), normalize = normalize, PACKAGE="otoclass")
+    res <- .Call("efd",
+                 dat = unique(dat),
+                 N = as.integer(N),
+                 normalize = normalize,
+                 PACKAGE="otoclass")
     names(res$A0) <- "A0"
     names(res$C0) <- "C0"
     names(res$A) <- paste0("A",1:N)

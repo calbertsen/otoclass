@@ -9,6 +9,49 @@
 #include <TMB.hpp>
 
 
+
+
+
+namespace my_atomic {
+   template<class Float>
+  struct Lp_t {
+    typedef Float Scalar;
+    Float lambda;
+    Float p;
+    Float xx;
+    Float operator() (Float x) {
+      return exp(-pow(fabs(x),p) / lambda) / lambda;
+    }
+    Float density() {
+      using gauss_kronrod::integrate;
+      Float norm = integrate(*this, -INFINITY, INFINITY);
+      Float ans = -pow(fabs(xx),p) / lambda - log(lambda) - log(norm);
+      return ans;
+    }
+  };
+
+  template<class Float>
+  Float eval(Float x, Float p, Float lambda) {
+    Lp_t<Float> f = {x, p, lambda};
+    return f.density();
+  }
+  TMB_BIND_ATOMIC(func, 101, eval(x[0], x[1], x[2]))
+  template<class Type>
+  Type Lp(Type x, Type p, Type lambda) {
+    vector<Type> args(4); // Last index reserved for derivative order
+    args << x, p, lambda, 0;
+    return my_atomic::func(CppAD::vector<Type>(args))[0];
+  }
+}
+
+
+
+
+
+
+
+
+
 using namespace density;
 using Eigen::SparseMatrix;
 
@@ -112,7 +155,6 @@ Type objective_function<Type>::operator() () {
   Model::Types modelType = static_cast<Model::Types>(model);
   
   DATA_INTEGER(penalty);
-  DATA_VECTOR(logLambda);// DATA_UPDATE(logLambda);
   DATA_VECTOR(prior);
   DATA_ARRAY(X_pred);
   DATA_SPARSE_MATRIX(covar);
@@ -123,11 +165,12 @@ Type objective_function<Type>::operator() () {
   PARAMETER_MATRIX(logSigma);
   PARAMETER_MATRIX(corpar);
   PARAMETER_VECTOR(logDelta);
+  DATA_VECTOR(logLambda);// DATA_UPDATE(logLambda);
 
 
-  Type scale = X.dim.prod();
+  Type scale = 1.0; //X.dim.prod();
   
-  vector<Type> lambda = logLambda.exp();
+  vector<Type> lambda = exp(-logLambda);
   vector<Type> delta = logDelta.exp();
 
   matrix<Type> sigma(logSigma.rows(), logSigma.cols());
@@ -185,7 +228,7 @@ Type objective_function<Type>::operator() () {
 
   // Penalty
   // vector<Type> muRMean = mu.rowwise().mean();
-  if(penalty > 0){
+  if(penalty != 0){
 
     array<Type> muCMean(mu.dim[0],mu.dim[1]); // Mean over groups
     muCMean.setZero();
@@ -195,27 +238,39 @@ Type objective_function<Type>::operator() () {
 
     REPORT(muCMean);
     
-    Type normR = 0.0;
-    Type normC = 0.0;
+    // Type normR = 0.0;
+    // Type normC = 0.0;
 
     //Type normC = 0.0;
     // Penalty if mu is used
     for(int i = 0; i < mu.dim[0]; ++i)
       for(int j = 0; j < mu.dim[1]; ++j){
-	normC += pow(abs(muCMean(i,j)), penalty);
+	// nll += pow(abs(muCMean(i,j)), penalty) * lambda(1);
 	for(int k = 0; k < mu.dim[2]; ++k){
-	  normR += pow(abs(mu(i,j,k) - muCMean(i,j)), penalty); // sigma(i,j) *
-	  //normR += pow(abs(mu(i,j,k)), penalty); // sigma(i,j) *
+	  // nll += pow(abs(mu(i,j,k) - muCMean(i,j)), penalty) * lambda(0); // sigma(i,j) *
+	  switch(penalty){
+	  case -1:
+	    nll -= dt(mu(i,j,k) / lambda(0),Type(3.0),true) - log(lambda(0));
+	    break;
+	  case 1:
+	    nll -= -fabs(mu(i,j,k)) / lambda(0) - log(2.0 * lambda(0));
+	    break;
+	  case 2:
+	    nll -= dnorm(mu(i,j,k),Type(0.0),lambda(0), true); // sigma(i,j) *
+	    break;
+	  default:
+	    nll -= my_atomic::Lp(mu(i,j,k),(Type)penalty,lambda(0)); //pow(abs(mu(i,j,k)), penalty) / lambda(0) - log(lambda(0));
+	  }
 	}
       }
-    nll += lambda(0) * pow(normR, 1.0/(double)penalty);
-    nll += lambda(1) * pow(normC, 1.0/(double)penalty);
+    // nll += lambda(0) * pow(normR, 1.0/(double)penalty);
+    // nll += lambda(1) * pow(normC, 1.0/(double)penalty);
 
-    Type normCor = 0.0;
-    for(int j = 0; j < corpar.cols(); ++j)
-      for(int i = 0; i < corpar.rows(); ++i)
-    	normCor += pow(abs(corpar(i,j)), penalty);
-    nll += lambda(2) * pow(normCor, 1.0/(double)penalty);
+    // // Type normCor = 0.0;
+    // for(int j = 0; j < corpar.cols(); ++j)
+    //   for(int i = 0; i < corpar.rows(); ++i)
+    //     nll += pow(abs(corpar(i,j)), penalty) * lambda(2);
+    // // nll += lambda(2) * pow(normCor, 1.0/(double)penalty);
     
     // Penalty if efd is used
     if(efd.cols() > 0){
@@ -230,10 +285,10 @@ Type objective_function<Type>::operator() () {
 	for(int cc = 0; cc < efd.dim[0]; ++cc){
 	  Type norm = 0.0;
 	  for(int i = 1; i < efd.dim[1]; ++i){
-	    norm += pow(abs(efd(cc,i,j)), penalty); 
+	    norm += pow(fabs(efd(cc,i,j)), penalty); 
 	  }
 	  if(cc == 3)
-	    norm += pow(abs(efd(cc,0,j)), penalty); 
+	    norm += pow(fabs(efd(cc,0,j)), penalty); 
 	  nll += lambda(0) * pow(norm, 1.0/(double)penalty);	  
 	}
       }

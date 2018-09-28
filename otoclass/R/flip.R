@@ -24,7 +24,7 @@ flip.matrix <- function(x, axis, ...){
 ##' @export
 flip.otolith_contour <- function(x, axis, ...){
     at <- attributes(x)
-    val <- flip(unclass(x))
+    val <- flip(unclass(x), axis = axis, ...)
     attributes(val) <- at
     attr(val,"Flipped")[axis] <- !attr(val,"Flipped")[axis]
     return(val)

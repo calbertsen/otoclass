@@ -8,18 +8,18 @@
 \alias{efd.otolith_contour_list}
 \title{Calculate Elliptical Fourier Descriptors}
 \usage{
-efd(dat, N, ...)
+efd(x, N, ...)
 
-\method{efd}{matrix}(dat, N, returnAsList = FALSE, normalize = FALSE, ...)
+\method{efd}{matrix}(x, N, returnAsList = FALSE, normalize = FALSE, ...)
 
-\method{efd}{otolith_contour}(dat, N, ...)
+\method{efd}{otolith_contour}(x, N, ...)
 
-\method{efd}{otolith_image}(dat, N, ...)
+\method{efd}{otolith_image}(x, N, ...)
 
-\method{efd}{otolith_contour_list}(dat, N, ...)
+\method{efd}{otolith_contour_list}(x, N, ...)
 }
 \arguments{
-\item{dat}{contour object}
+\item{x}{contour object}
 
 \item{N}{Number of harmonics to calculate}
 

@@ -1,6 +1,6 @@
 ##' Calculate Elliptical Fourier Descriptors
 ##'
-##' @param dat contour object 
+##' @param x contour object 
 ##' @param N Number of harmonics to calculate
 ##' @param returnAsList Should result be returned as a list that can be passed to \code{efd2coord}?
 ##' @param normalize Normalize using method from Ferson et al. 1985?
@@ -24,18 +24,19 @@
 ##' efd(Ellipsis(-pi/2),1,normalize = TRUE)
 ##'
 ##' @export
-efd <- function(dat, N, ...){
+efd <- function(x, N, ...){
     UseMethod("efd")
 }
 
 ##' @rdname efd
 ##' @method efd matrix
 ##' @export
-efd.matrix <- function(dat, N, returnAsList = FALSE, normalize = FALSE, ...){
-    if(!isTRUE(all.equal(dat[1,],dat[nrow(dat),])))
-        dat <- rbind(dat,dat[1,])
+efd.matrix <- function(x, N, returnAsList = FALSE, normalize = FALSE, ...){
+    if(!isTRUE(all.equal(x[1,],x[nrow(x),])))
+        x <- rbind(x,x[1,])
+    xu <- x[c(TRUE,diff(x[,1]) != 0 ) | c(TRUE,diff(x[,2]) != 0 ), ]
     res <- .Call("efd",
-                 dat = unique(dat),
+                 dat = xu,
                  N = as.integer(N),
                  normalize = normalize,
                  PACKAGE="otoclass")
@@ -58,22 +59,22 @@ efd.matrix <- function(dat, N, returnAsList = FALSE, normalize = FALSE, ...){
 ##' @rdname efd
 ##' @method efd otolith_contour
 ##' @export
-efd.otolith_contour <- function(dat, N, ...){
-    efd.matrix(dat = dat, N = N, ...)
+efd.otolith_contour <- function(x, N, ...){
+    efd.matrix(x = unclass(x), N = N, ...)
 }
 
 ##' @rdname efd
 ##' @method efd otolith_image
 ##' @export
-efd.otolith_image <- function(dat, N, ...){
-    lres <- lapply(dat, efd, N=N, ...)
+efd.otolith_image <- function(x, N, ...){
+    lapply(x, efd, N=N, ...)
 }
 
 ##' @rdname efd
 ##' @method efd otolith_contour_list
 ##' @export
-efd.otolith_contour_list <- function(dat, N, ...){
-    lres <- lapply(dat, efd, N=N, ...)    
+efd.otolith_contour_list <- function(x, N, ...){
+    lapply(x, efd, N=N, ...)    
 }
 
 ##' Calculate XY-coordinates from Elliptical Fourier Descriptors

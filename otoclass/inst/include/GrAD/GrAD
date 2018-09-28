@@ -1,0 +1,75 @@
+// This file is part of GrAD, a C++ template library for
+// graph based reverse mode automatic differentiation in C++
+//
+// Copyright (C), Christoffer Moesgaard Albertsen <cmoe@aqua.dtu.dk>
+
+
+#ifndef _GRAD_BASE_LIBRARY_
+#define _GRAD_BASE_LIBRARY_
+
+#include <cmath>
+#include <vector>
+#include <string>
+#include <sstream>
+
+namespace GrAD {
+
+using std::vector;
+using std::string;
+
+using std::stringstream;
+
+string itos(int i){
+  std::stringstream s;
+  s << i;
+  return s.str();
+}
+
+// Use std operations
+
+using std::abs;
+using std::fabs;
+using std::sqrt;
+using std::acos;
+using std::asin;
+using std::atan;
+using std::cos;
+using std::cosh;
+using std::exp;
+using std::log;
+using std::log10;
+using std::sin;
+using std::sinh;
+using std::tan;
+using std::tanh;
+using std::atan2;
+using std::pow;
+
+
+#ifdef __cplusplus
+#if __cplusplus >= 201103L
+using std::acosh;
+using std::asinh;
+using std::atanh;
+using std::expm1;
+using std::log1p;
+using std::erf;
+using std::exp2;
+using std::log2;
+#endif
+#endif
+
+
+
+#include "src/ADdeclarations.hpp"
+
+#include "src/ADnode.hpp"
+#include "src/ADparlist.hpp"
+
+#include "src/operations/allOperations.hpp"
+
+#include "src/AD.hpp"
+
+}
+
+#endif

@@ -5,9 +5,10 @@
 \title{Maximum Likelihood Linear Discrimination}
 \usage{
 mlld(train, group, test, prior = as.vector(table(group))/length(group),
-  penalty = 0, lambda = rep(0.4, 3), independent = FALSE,
-  silent = FALSE, control = list(iter.max = 1e+05, eval.max = 1e+05),
-  formula = NULL, data = NULL, dataTest = NULL, ...)
+  featureSelection = c("none", "fcbf", "Lp"), penalty = 0, lambda = 0.4,
+  estimateLambda = TRUE, independent = FALSE, silent = FALSE,
+  control = list(iter.max = 1e+05, eval.max = 1e+05), formula = ~1,
+  data = NULL, dataTest = NULL, fcbfDelta = 0.01, fcbfLambda = 1, ...)
 }
 \arguments{
 \item{train}{Matrix of training data (number of observations x number of features)}

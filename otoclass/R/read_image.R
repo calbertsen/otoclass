@@ -56,7 +56,10 @@ rotate_image <- function(dat){
 }
 
 newStart_image <- function(dat){
-    ldat <- dim(dat)[1]
+    isClosed <- isTRUE(all.equal(dat[1,],dat[nrow(dat),]))
+    if(isClosed)
+        dat <- dat[-nrow(dat),]
+    ldat <- nrow(dat)
     newBegin <- which.max(dat[,1])
     if(newBegin == 1){
         datNew <- dat
@@ -66,9 +69,10 @@ newStart_image <- function(dat){
                         )
     }
     if(datNew[2,2] < datNew[1,2])
-        datNew <- rbind(datNew[1,],
-                        apply(datNew[-1,],2,rev)
-                        )
+        datNew <- apply(datNew,2,rev)
+    if(isClosed){
+        datNew <- rbind(datNew,datNew[1,])
+    }
     attrs <- attributes(dat)
     attrs[names(attributes(datNew))] <- attributes(datNew)
     attributes(datNew) <- attrs

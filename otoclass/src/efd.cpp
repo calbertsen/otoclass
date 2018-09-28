@@ -41,10 +41,10 @@ extern "C" {
       rcoord[i + NN * 1] = REAL(C0)[0];
       for(int j = 0; j < NE; ++j){
 	double tmp = 2.0 * ((double)j + 1.0) * M_PI * (double)i / (double)(NN-1);
-	rcoord[i + NN * 0] += refd[j + NE * 0] * cos(tmp);
-	rcoord[i + NN * 0] += refd[j + NE * 1] * sin(tmp);
-	rcoord[i + NN * 1] += refd[j + NE * 2] * cos(tmp);
-	rcoord[i + NN * 1] += refd[j + NE * 3] * sin(tmp);
+	rcoord[i + NN * 0] += refd[j + NE * 0] * cos(tmp); // A
+	rcoord[i + NN * 0] += refd[j + NE * 1] * sin(tmp); // B
+	rcoord[i + NN * 1] += refd[j + NE * 2] * cos(tmp); // C
+	rcoord[i + NN * 1] += refd[j + NE * 3] * sin(tmp); // D
       }
     }
     UNPROTECT(1);

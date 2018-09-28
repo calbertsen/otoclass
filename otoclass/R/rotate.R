@@ -13,19 +13,26 @@ rotate <- function(x, angle, degrees = TRUE, ...){
 }
 
 ##' @export
-rotate.matrix <- function(x, angle, degrees = TRUE, ...){
-    cent <- apply(x,2,function(xx) mean(range(xx)))
-    xc <- t(t(x) - cent)
+rotate.matrix <- function(x, angle, degrees = TRUE, center = FALSE, newStart = FALSE, ...){
+    if(center){
+        cent <- apply(x,2,function(xx) mean(range(xx)))
+        xc <- t(t(x) - cent)
+    }else{
+        xc <- x
+    }
     if(degrees)
         angle <- angle / 180 * pi
     rotMat <- matrix(c(cos(angle),sin(angle),-sin(angle),cos(angle)), ncol=2)
     val <- t( t(xc %*% rotMat) + cent)
+    if(newStart)
+        val <- newStart_image(val)
+    return(val)
 }
 
 ##' @export
 rotate.otolith_contour <- function(x, angle, degrees = TRUE, ...){
     at <- attributes(x)
-    val <- rotate(unclass(x), angle = angle, degrees = degrees, ...)
+    val <- rotate(unclass(x), angle = angle, degrees = degrees, center = TRUE, newStart = TRUE, ...)
     attributes(val) <- at
     if(degrees)
         angle <- angle / 180 * pi

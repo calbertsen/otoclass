@@ -111,4 +111,32 @@ plot.otolith_contour_list<- function(x,asUsed = FALSE, ask = TRUE, ...){
 }
 
 
+##' @export
+##' @author Christoffer Moesgaard Albertsen
+`[.otolith_contour_list` <- function(x, i){
+    a <- attributes(x)
+    r <- unclass(x)[i]
+    attributes(r) <- a
+    return(r)
+}
+
+##' @export
+##' @author Christoffer Moesgaard Albertsen
+`[[<-.otolith_contour_list` <- function(x, i, value){
+    a <- attributes(x)
+    r <- unclass(x) ## Convert to list
+    r[[i]] <- value
+    attributes(r) <- a
+    return(r)
+}
+
+##' @export
+##' @author Christoffer Moesgaard Albertsen
+`[<-.otolith_contour_list` <- function(x, i, value){
+    a <- attributes(x)
+    r <- unclass(x) ## Convert to list
+    r[i] <- value
+    attributes(r) <- a
+    return(r)
+}
 

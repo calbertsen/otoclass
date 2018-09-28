@@ -3,6 +3,7 @@
 #define R_NO_REMAP
 #include <Rinternals.h>
 
+#include "../inst/include/biascorrect.hpp"
 #include "../inst/include/convert.hpp"
 #include "../inst/include/convol.hpp"
 #include "../inst/include/efd.hpp"
@@ -36,7 +37,11 @@ extern "C" {
     CALLDEF(usingAtomics, 0),
     CALLDEF(TMBconfig, 2),
 #endif
-    
+
+    CALLDEF(biascorrect_logistic,1),
+    CALLDEF(biascorrect_logistic_gradient,1),
+    CALLDEF(biascorrect_objective,3),
+    CALLDEF(biascorrect_gradient,3),
     CALLDEF(convol2d,2),
     CALLDEF(knn,5),
     CALLDEF(polygon_area,2),

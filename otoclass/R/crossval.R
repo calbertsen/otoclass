@@ -52,11 +52,15 @@ crossval.mlld <- function(x,
                 args$dataTest <- args$data[foldIndex == i, , drop = FALSE]
                 args$data <- args$data[foldIndex != i, , drop = FALSE]
             }
+            args$estimateUnbiasedTestProportions <- FALSE
+            args$biasCorrectionGroup <- NULL
             suppressWarnings(y <- do.call(FUN,args))
             pred <- predict(y)$class
-            table(true=trueGroup[foldIndex == i], pred)
+            cbind(data.frame(true=trueGroup[foldIndex == i], prediction=pred),args$dataTest)
         }, simplify = FALSE)
-        op <- list(crossval_table = Reduce("+",res))
+        res <- do.call("rbind",res)
+        op <- list(prediction = res,
+                   crossval_table = table(True=res$true,Predicted=res$prediction))
         op$total_success <- sum(diag(op$crossval_table)) / sum(op$crossval_table)
         op$groupwise_success <- diag(op$crossval_table) / rowSums(op$crossval_table)
         op$group_numbers <- rowSums(op$crossval_table)

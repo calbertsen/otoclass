@@ -144,7 +144,8 @@ transformPixelMatrix <- function(pic,
                                  gaussianBlur = FALSE,
                                  gaussianBlurSize = 3,
                                  gaussianBlurSigma = 1,
-                                 unsharp = FALSE) {
+                                 unsharp = FALSE,
+                                 floodFillTolerance = 0) {
     if(logisticTransform){
         pic <- stats::plogis(pic,logisticTransformLocation,logisticTransformScale) * 255     
     }
@@ -168,6 +169,10 @@ transformPixelMatrix <- function(pic,
         pic[pic < 0] <- 0
         pic[pic > 255] <- 255
     }
+    if(floodFillTolerance > 0){
+        pic <- round(.Call("scanlineFill", pic/255, floodFillTolerance) * 255)
+        pic[pic == -255] <- 0
+    }
     return(pic)
 }
 
@@ -190,6 +195,7 @@ transformPixelMatrix <- function(pic,
 ##' @param assignSinglesByPosition Should single otoliths be assigned to Left/Right based on position on image?
 ##' @param minCountScale See details
 ##' @param minCountForMax See details
+##' @param reduceCutOffPercent See details
 ##' @param zeroCutOffPercent See details
 ##' @return otolith image object
 ##' @author Christoffer Moesgaard Albertsen
@@ -202,6 +208,7 @@ read_image<- function(file,
                       onlyOne = FALSE,
                       minPixelDiff = 0.05 * min(nc,nr),
                       extreme = TRUE,
+                      floodFillTolerance = 0,
                       borderBasedCutOff = FALSE,
                       logisticTransform = FALSE,
                       logisticTransformLocation = c("mean","median","borderMean","borderMedian"),
@@ -214,6 +221,7 @@ read_image<- function(file,
                       assignSinglesByPosition = TRUE,
                       minCountScale = 0,
                       minCountForMax = 1e-4,
+                      reduceCutOffPercent = 0,
                       zeroCutOffPercent = 0.05){
     r<-getPixelMatrix(file)
     rv <- t(r[nrow(r):1,])
@@ -250,8 +258,9 @@ read_image<- function(file,
                                gaussianBlur = gaussianBlur,
                                gaussianBlurSize = gaussianBlurSize,
                                gaussianBlurSigma = gaussianBlurSigma,
-                               unsharp = unsharp)
-    
+                               unsharp = unsharp,
+                               floodFillTolerance = floodFillTolerance)
+   
     maxrv <- max(rv)
 
     if(is.null(noiseFactor)){
@@ -263,11 +272,12 @@ read_image<- function(file,
             ## mv1 <- 1:round(maxrv/2)
             ## mv2 <- (round(maxrv/2)+1):maxrv
             mx <- max(which(hh$counts > nc*nr * minCountForMax))
-            mv1 <- 1:round(mx/2)
+            mv1 <- 2:round(mx/2)
             mv2 <- (round(mx/2)+1):mx
             m1 <- mv1[which.max(hd[mv1 + 1])]
             m2 <- mv2[which.max(hd[mv2 + 1])]
             i1 <- max(m1) + which.min(hd[m1:m2 + 1]) - 1
+            i1 <- i1 - (i1 - m1) * reduceCutOffPercent
         }
         noiseFactor <- maxrv / i1 
     }        
@@ -340,6 +350,7 @@ read_image<- function(file,
         attr(res[[i]],"GaussianBlur") <- list(used = gaussianBlur & !unsharp,
                                               size = gaussianBlurSize,
                                               sigma = gaussianBlurSigma)
+        attr(res[[i]],"floodFillTolerance") <- floodFillTolerance
         attr(res[[i]],"UnsharpMask") <- list(used = unsharp)
         attr(res[[i]],"ImagePixels") <- c(nc,nr)
         attr(res[[i]],"Normalized") <- FALSE
@@ -356,6 +367,7 @@ read_image<- function(file,
     attr(res,"GaussianBlur") <- list(used = gaussianBlur & !unsharp,
                                      size = gaussianBlurSize,
                                      sigma = gaussianBlurSigma)
+    attr(res,"floodFillTolerance") <- floodFillTolerance
     attr(res,"UnsharpMask") <- list(used = unsharp)
     attr(res,"ImagePixels") <- c(nc,nr)
     class(res) <- "otolith_image"

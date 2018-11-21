@@ -21,7 +21,7 @@ knn <- function(train,
     dist <- match.arg(dist)
     res <- list()
     class(res) <- "oto_knn"
-    res$probabilities <- .Call('knn', PACKAGE = 'otoclass', train = t(train), group = as.integer(group)-1L, test = t(test), kn = kn, disttype = as.integer(factor(dist,c("L2", "L1","Linf"))))
+    res$probabilities <- .Call('knn', PACKAGE = 'otoclass', train = t(train), group = group, test = t(test), kn = as.integer(kn), disttype = as.integer(factor(dist,c("L2", "L1","Linf"))))
     colnames(res$probabilities) <- levels(group)
     rownames(res$probabilities) <- rownames(test)
     res$predicted <- factor(levels(group)[apply(res$probabilities,1,which.max)], levels = levels(group))

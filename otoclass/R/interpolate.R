@@ -13,7 +13,7 @@ interpolate <- function(x, N, Nefd, ...){
 
 ##' @export
 interpolate.matrix <- function(x, N, Nefd, ...){
-    eList <- efd(x, N=N, returnAsList = TRUE)
+    eList <- efd(x, N=Nefd, returnAsList = TRUE)
     eList$n <- N
     val <- do.call(efd2coord, eList)
     #val <-  newStart_image(val)
@@ -39,7 +39,7 @@ interpolate.otolith_contour_list <- function(x, N, Nefd, ...){
 }
 
 ##' @export
-interpolate.otolith_contour_image<- function(x, N, Nefd, ...){
+interpolate.otolith_otolith_image<- function(x, N, Nefd, ...){
     at <- attributes(x)
     val <- lapply(x, interpolate, N=N, Nefd = Nefd, ...)
     attributes(val) <- at

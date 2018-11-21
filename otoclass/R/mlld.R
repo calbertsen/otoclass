@@ -18,7 +18,7 @@
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stats nlminb cor
 ##' @importFrom methods as
-##' @importFrom TMB MakeADFun
+##' @importFrom TMB MakeADFun sdreport
 ##' @export
 mlld <- function(train, group, test,
                  prior = as.vector(table(group)) / length(group),
@@ -30,10 +30,18 @@ mlld <- function(train, group, test,
                  silent = FALSE,                 
                  control = list(iter.max = 100000, eval.max = 100000),
                  formula = ~1,
+                 formulaCommon = ~1,
                  data = NULL,
                  dataTest = NULL,
+                 estimateUnbiasedTestProportions = FALSE,
+                 trainContributionToTestProportions = FALSE,
+                 biasCorrectionGroup = NULL,
+                 trainBiasCorrectionGroup = NULL,
+                 addMisfitCategory = FALSE,
                  fcbfDelta = 0.01,
                  fcbfLambda = 1,
+                 onlyObj = FALSE,
+                 doSdreport = FALSE,
                  ...){
 ##### Checks #####
     featureSelection <- match.arg(featureSelection)
@@ -94,6 +102,40 @@ mlld <- function(train, group, test,
                       Lp = 1:ncol(train),
                       default = 1:ncol(train)
                       )
+
+    if(is.null(biasCorrectionGroup)){
+        biasCorrectionGroup <- factor(rep(1,nrow(test)))
+    }else{
+        if(!(is.factor(biasCorrectionGroup) & length(biasCorrectionGroup) == nrow(test)))
+            stop("biasCorrectionGroup must be a factor of the same length as test")
+    }
+
+    ## Common effects
+    formulaCommon <- update.formula(formulaCommon, ~ . +1)
+    mfCommon <- model.frame(formulaCommon, data)
+    commonCovar <- Matrix::sparse.model.matrix(terms(mfCommon),
+                                         data = data,
+                                         transpose = TRUE,
+                                         row.names = FALSE)
+    if(inherits(commonCovar,"dgCMatrix"))
+        commonCovar <- as(commonCovar,"dgTMatrix")
+   commonCovarTest <- Matrix::sparse.model.matrix(terms(mfCommon),
+                                             data = dataTest,
+                                             transpose = TRUE,
+                                             row.names = FALSE)
+    if(inherits(commonCovarTest,"dgCMatrix"))
+        commonCovarTest <- as(commonCovarTest,"dgTMatrix")
+
+    if(!is.null(trainBiasCorrectionGroup)){
+        if(trainContributionToTestProportions){
+            if(!all(levels(biasCorrectionGroup) == levels(trainBiasCorrectionGroup)))
+                stop("biasCorrectionGroup and trainBiasCorrectionGroup must have the same levels")
+            if(length(trainBiasCorrectionGroup) != nrow(train))
+                stop("trainBiasCorrectionGroup must have the same length as the number of rows in train")
+        }
+    }else{      
+        trainBiasCorrectionGroup <- factor(rep(1,nrow(train)))
+    }
     
 ##### Data for TMB #####
     dat <- list(model = ifelse(independent,0L,1L),
@@ -104,7 +146,13 @@ mlld <- function(train, group, test,
                 prior = prior,
                 X_pred = t(test[,indxUse, drop = FALSE]),
                 covar = covar,
-                covar_pred = covarTest
+                covar_pred = covarTest,
+                commonCovar = commonCovar,
+                commonCovar_pred = commonCovarTest,
+                estimateUnbiasedTestProportions = as.integer(estimateUnbiasedTestProportions),
+                trainContributionToTestProportions = as.integer(trainContributionToTestProportions),               testBiasCorrectionGroup = biasCorrectionGroup,
+                trainBiasCorrectionGroup = trainBiasCorrectionGroup,
+                addMisfitCategory = as.integer(addMisfitCategory)
                 )
 ##### Parameters for TMB #####
     n <- nrow(dat$X)
@@ -123,11 +171,14 @@ mlld <- function(train, group, test,
             par$logLambda <- log(lambda)
     }else{
         par <- list(mu = mn, ##matrix(0.0,nrow(dat$X),nlevels(dat$G)),
+                    commonMu = matrix(0,nrow(dat$commonCovar),nrow(dat$X)),
                     efd = matrix(0.0,0,0),
                     logSigma = matrix(log(apply(dat$X,1,sd))+2,n,nlevels(dat$G)),
                     corpar = matrix(corcalc,(n*n-n)/2,nlevels(dat$G)),
                     logDelta = 0,
-                    logLambda = log(lambda)
+                    logLambda = log(lambda),
+                    thetaIn = matrix(0.0,(nlevels(dat$G)-1 + as.numeric(addMisfitCategory))*estimateUnbiasedTestProportions,
+                                     nlevels(biasCorrectionGroup)*estimateUnbiasedTestProportions)
                     )
     }
     np <- Reduce("+",lapply(par,length))
@@ -144,20 +195,28 @@ mlld <- function(train, group, test,
                 corpar = corparMap,
                 logDelta = factor(NA)
                 )
+
+    if(nrow(par$commonMu) > 0){
+        cMuMap <- matrix(1:length(par$commonMu),nrow(par$commonMu),ncol(par$commonMu))
+        cMuMap[1,] <- NA    
+        map$commonMu <- factor(cMuMap)
+    }
     if(!estimateLambda || featureSelection != "Lp"){
         map$logLambda <- factor(par$logLambda*NA)
         rnd <- c()
     }else{
-        rnd <- "mu"
+        rnd <- c("mu","commonMu")
     }
     npfix <- Reduce("+",lapply(map,function(x)sum(is.na(x))))
     if(np-npfix > nrow(train) / 10)
         warning(sprintf("The model has %s parameters with only %s observations - %.2f observations per parameter. There is a high risk of overfitting.",np-npfix,nrow(train),nrow(train)/(np-npfix))) 
-
+    
 ##### Make TMB object #####
     obj <- TMB::MakeADFun(dat,par,map,
-                          silent = silent, random = rnd,
+                          silent = silent, profile = rnd,
                           DLL = "otoclass")
+    if(onlyObj)
+        return(obj)
     opt <- stats::nlminb(obj$par,
                          obj$fn,
                          obj$gr,
@@ -167,12 +226,19 @@ mlld <- function(train, group, test,
     muNames <- list(rownames(dat$covar),
                     colnames(train),
                     levels(group))
+    commonMuNames <- list(rownames(dat$commonCovar),
+                          colnames(train))
 
     posterior <- exp(t(rp$logpred))
     colnames(posterior) <- levels(group)
-    rownames(posterior) <- rownames(train)
+    rownames(posterior) <- rownames(test)
     clas <- factor(levels(group)[apply(posterior,1,which.max)], levels = levels(group))
 
+    if(doSdreport){
+        sdr <- TMB::sdreport(obj,opt$par)
+    }else{
+        sdr <- NULL
+    }
     
     res <- list(tmb_data = obj$env$data,
                 tmb_map = map,
@@ -182,14 +248,17 @@ mlld <- function(train, group, test,
                 silent = silent,
                 opt = opt,
                 rp = rp,
+                sdr = sdr,
                 featureSelection = featureSelection,
                 features = indxUse,
                 overfit = np-npfix > nrow(train) / 10,
                 muNames = muNames,
+                commonMuNames = commonMuNames,
                 pl = obj$env$parList(opt$par),
                 call = call,
                 prior = prior,
                 terms = terms(mf),
+                termsCommon = terms(mfCommon),
                 train = train,
                 test = test,
                 group = group,

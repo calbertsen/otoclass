@@ -9,6 +9,7 @@
 #include "../inst/include/efd.hpp"
 #include "../inst/include/knn.hpp"
 #include "../inst/include/polygon.hpp"
+#include "../inst/include/floodfill.hpp"
 
 #define install Rf_install
 #define findVar Rf_findVar
@@ -47,6 +48,7 @@ extern "C" {
     CALLDEF(polygon_area,2),
     CALLDEF(efd2coordSEXP,4),
     CALLDEF(efd,3),
+    CALLDEF(scanlineFill,2),
     {NULL,NULL,0}
   };
 

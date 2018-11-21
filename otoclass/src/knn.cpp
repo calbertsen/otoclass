@@ -49,7 +49,7 @@ MatrixXd knn_work(MatrixXd train, intVector group, MatrixXd test, int kn, int di
     //Run through neighbours
     for(int j = 0; j < indx.size(); ++j){
       // Add a vote to the group it belongs to
-      pred(i,group(indx(j))) += 1.0/(double)kn;
+      pred(i,group(indx(j))-1) += 1.0/(double)kn;
     }
   }
 
@@ -60,9 +60,11 @@ MatrixXd knn_work(MatrixXd train, intVector group, MatrixXd test, int kn, int di
 
 extern "C" {
   SEXP knn(SEXP train, SEXP group, SEXP test, SEXP kn, SEXP disttype){
+    if(!Rf_isFactor(group))
+      Rf_error("group must be a factor!");	
     SEXP uniqueGroups;
     PROTECT(uniqueGroups = Rf_eval( Rf_lang2( Rf_install("unique"), group), R_GlobalEnv));
-    MatrixXd res = knn_work(asDoubleMatrix(train), asIntVector(group), asDoubleMatrix(test), asInteger(kn), asInteger(disttype), Rf_length(uniqueGroups));
+    MatrixXd res = knn_work(asDoubleMatrix(train), asIntVector(group), asDoubleMatrix(test), asInteger(kn), asInteger(disttype), Rf_nlevels(group));
     UNPROTECT(1);
     return asSEXP(res);
   }

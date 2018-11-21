@@ -12,7 +12,7 @@ RCHECK := ${PACKAGE}.Rcheck
 $(NAMESPACEFILE): $(RFILES)
 	@echo "\033[0;32mUpdating documentation\033[0;0m"
 	rm -f ${PACKAGE}/src/*.so
-	$(R) -q -e 'devtools::document("${PACKAGE}")'
+	$(R) -q -e 'roxygen2::roxygenise("${PACKAGE}", roclets = c("collate", "namespace", "rd"))'
 	@touch $@
 
 $(TARBALL): $(NAMESPACEFILE) $(CPPFILES)

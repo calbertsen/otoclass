@@ -69,6 +69,8 @@ projection.mlld <- function(x, test, ...){
     if(any(!noImPart & nonZeroRe))
         warning("Imaginary part of eigen vectors ignored.")
     evec <- Re(ee$vectors[,eeUse])
+    if(is.data.frame(test))
+        test <- as.matrix(test)
     projdat <- test %*% evec
     colnames(projdat) <- paste0("CD",1:ncol(projdat))
     rownames(projdat) <- rownames(test)

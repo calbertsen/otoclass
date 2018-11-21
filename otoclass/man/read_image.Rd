@@ -4,14 +4,16 @@
 \alias{read_image}
 \title{Read Otolith Images and Extract Contours}
 \usage{
-read_image(file, noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0.05
-  * min(nc, nr), extreme = TRUE, borderBasedCutOff = FALSE,
-  logisticTransform = FALSE, logisticTransformLocation = c("mean", "median",
-  "borderMean", "borderMedian"), logisticTransformScale = 1,
+read_image(file, noiseFactor = NULL, onlyOne = FALSE,
+  minPixelDiff = 0.05 * min(nc, nr), extreme = TRUE,
+  floodFillTolerance = 0, borderBasedCutOff = FALSE,
+  logisticTransform = FALSE, logisticTransformLocation = c("mean",
+  "median", "borderMean", "borderMedian"), logisticTransformScale = 1,
   gaussianBlur = FALSE, gaussianBlurSize = round(0.02 * min(nc, nr)),
   gaussianBlurSigma = gaussianBlurSize/10, unsharp = FALSE,
-  pixelwise = FALSE, assignSinglesByPosition = TRUE, minCountScale = 0,
-  minCountForMax = 1e-04, zeroCutOffPercent = 0.05)
+  pixelwise = FALSE, assignSinglesByPosition = TRUE,
+  minCountScale = 0, minCountForMax = 1e-04, reduceCutOffPercent = 0,
+  zeroCutOffPercent = 0.05)
 }
 \arguments{
 \item{file}{Image file path}
@@ -47,6 +49,8 @@ read_image(file, noiseFactor = NULL, onlyOne = FALSE, minPixelDiff = 0.05
 \item{minCountScale}{See details}
 
 \item{minCountForMax}{See details}
+
+\item{reduceCutOffPercent}{See details}
 
 \item{zeroCutOffPercent}{See details}
 }

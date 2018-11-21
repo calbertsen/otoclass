@@ -72,7 +72,7 @@ doubleVector asDoubleVector(SEXP x) {
 
 intVector asIntVector(SEXP x) {
 
-  if(!Rf_isInteger(x))
+  if(!Rf_isInteger(x) && !Rf_isFactor(x))
     Rf_error("Element must be an integer vector");
 
   int n = Rf_length(x);

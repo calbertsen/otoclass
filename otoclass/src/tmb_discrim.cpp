@@ -151,7 +151,12 @@ Type objective_function<Type>::operator() () {
   DATA_ARRAY(X);
   DATA_FACTOR(G);
   DATA_SPARSE_MATRIX(Q);
-
+  DATA_INTEGER(estimateUnbiasedTestProportions);
+  DATA_INTEGER(trainContributionToTestProportions);
+  DATA_FACTOR(testBiasCorrectionGroup);
+  DATA_FACTOR(trainBiasCorrectionGroup);
+  DATA_INTEGER(addMisfitCategory);
+  
   Model::Types modelType = static_cast<Model::Types>(model);
   
   DATA_INTEGER(penalty);
@@ -159,20 +164,35 @@ Type objective_function<Type>::operator() () {
   DATA_ARRAY(X_pred);
   DATA_SPARSE_MATRIX(covar);
   DATA_SPARSE_MATRIX(covar_pred);
+  DATA_SPARSE_MATRIX(commonCovar);
+  DATA_SPARSE_MATRIX(commonCovar_pred);
 
+  
   PARAMETER_ARRAY(mu);
+  PARAMETER_MATRIX(commonMu);
   PARAMETER_ARRAY(efd);
   PARAMETER_MATRIX(logSigma);
   PARAMETER_MATRIX(corpar);
   PARAMETER_VECTOR(logDelta);
-  DATA_VECTOR(logLambda);// DATA_UPDATE(logLambda);
-
+  PARAMETER_VECTOR(logLambda);// DATA_UPDATE(logLambda);
+  PARAMETER_MATRIX(thetaIn);
 
   Type scale = 1.0; //X.dim.prod();
   
   vector<Type> lambda = exp(-logLambda);
   vector<Type> delta = logDelta.exp();
 
+
+  array<Type> muUse(mu.dim);
+    for(int i = 0; i < muUse.dim[0]; ++i)
+      for(int j = 0; j < muUse.dim[1]; ++j){
+	muUse(i,j,0) = mu(i,j,0);
+	for(int k = 1; k < muUse.dim[2]; ++k){
+	  muUse(i,j,k) = muUse(i,j,0) + mu(i,j,k);
+	}
+      }
+  
+  
   matrix<Type> sigma(logSigma.rows(), logSigma.cols());
   for(int i = 0; i < sigma.rows(); ++i)
     for(int j = 0; j < sigma.cols(); ++j)
@@ -209,10 +229,16 @@ Type objective_function<Type>::operator() () {
     array<Type> tmp = X.col(i);
     switch(modelType) {
     case Model::Independent:
-      tmp -= (vector<Type>)(covar.col(i).transpose() * mu.col(G(i)).matrix());
+      tmp -= (vector<Type>)(covar.col(i).transpose() * muUse.col(G(i)).matrix());
+      if(commonCovar.rows() > 0){
+	tmp -= (vector<Type>)(commonCovar.col(i).transpose() * commonMu);
+      }
       break;
     case Model::Unstructured:
-      tmp -= (vector<Type>)(covar.col(i).transpose() * mu.col(G(i)).matrix());
+      tmp -= (vector<Type>)(covar.col(i).transpose() * muUse.col(G(i)).matrix());
+      if(commonCovar.rows() > 0){
+	tmp -= (vector<Type>)(commonCovar.col(i).transpose() * commonMu);
+      }
       break;
     case Model::GMRF:
       tmp -= coords(G(i)).array();
@@ -223,6 +249,7 @@ Type objective_function<Type>::operator() () {
     }
 
     nll += dist(G(i))(tmp) / scale;
+    
   }
 
 
@@ -230,13 +257,13 @@ Type objective_function<Type>::operator() () {
   // vector<Type> muRMean = mu.rowwise().mean();
   if(penalty != 0){
 
-    array<Type> muCMean(mu.dim[0],mu.dim[1]); // Mean over groups
-    muCMean.setZero();
-    for(int k = 0; k < mu.dim[2]; ++k)
-      muCMean += mu.col(k);
-    muCMean /= mu.dim[2];
+    // array<Type> muCMean(mu.dim[0],mu.dim[1]); // Mean over groups
+    // muCMean.setZero();
+    // for(int k = 0; k < mu.dim[2]; ++k)
+    //   muCMean += muUse.col(k);
+    // muCMean /= mu.dim[2];
 
-    REPORT(muCMean);
+    // REPORT(muCMean);
     
     // Type normR = 0.0;
     // Type normC = 0.0;
@@ -261,6 +288,24 @@ Type objective_function<Type>::operator() () {
 	  default:
 	    nll -= my_atomic::Lp(mu(i,j,k),(Type)penalty,lambda(0)); //pow(abs(mu(i,j,k)), penalty) / lambda(0) - log(lambda(0));
 	  }
+	}
+      }
+    for(int i = 0; i < commonMu.rows(); ++i)
+      for(int j = 0; j < commonMu.cols(); ++j){
+	// nll += pow(abs(muCMean(i,j)), penalty) * lambda(1);
+	// nll += pow(abs(mu(i,j,k) - muCMean(i,j)), penalty) * lambda(0); // sigma(i,j) *
+	switch(penalty){
+	case -1:
+	  nll -= dt(commonMu(i,j) / lambda(0),Type(3.0),true) - log(lambda(0));
+	  break;
+	case 1:
+	  nll -= -fabs(commonMu(i,j)) / lambda(0) - log(2.0 * lambda(0));
+	  break;
+	case 2:
+	  nll -= dnorm(commonMu(i,j),Type(0.0),lambda(0), true); // sigma(i,j) *
+	  break;
+	default:
+	  nll -= my_atomic::Lp(commonMu(i,j),(Type)penalty,lambda(0)); //pow(abs(mu(i,j,k)), penalty) / lambda(0) - log(lambda(0));
 	}
       }
     // nll += lambda(0) * pow(normR, 1.0/(double)penalty);
@@ -297,6 +342,7 @@ Type objective_function<Type>::operator() () {
 
   // Predict
   matrix<Type> logpred(NLEVELS(G),X_pred.cols());
+  matrix<Type> logpredNoPrior(NLEVELS(G),X_pred.cols());
   for(int i = 0; i < logpred.cols(); ++i){
     vector<Type> lp(NLEVELS(G));
     Type lps = 0.0;
@@ -305,10 +351,16 @@ Type objective_function<Type>::operator() () {
       tmpPred = X_pred.col(i);
       switch(modelType) {
       case Model::Independent:
-        tmpPred -= (vector<Type>)(covar_pred.col(i).transpose() * mu.col(j).matrix());
+        tmpPred -= (vector<Type>)(covar_pred.col(i).transpose() * muUse.col(j).matrix());
+	if(commonCovar.rows() > 0){
+	  tmpPred -= (vector<Type>)(commonCovar_pred.col(i).transpose() * commonMu);
+	}
 	break;
       case Model::Unstructured:
-	tmpPred -= (vector<Type>)(covar_pred.col(i).transpose() * mu.col(j).matrix());
+	tmpPred -= (vector<Type>)(covar_pred.col(i).transpose() * muUse.col(j).matrix());
+	if(commonCovar.rows() > 0){
+	  tmpPred -= (vector<Type>)(commonCovar_pred.col(i).transpose() * commonMu);
+	}
 	break;
       case Model::GMRF:
         tmpPred -= coords(j).array();
@@ -317,6 +369,7 @@ Type objective_function<Type>::operator() () {
 	Rf_error("Unknown model type");
 	break;
       }
+      logpredNoPrior(j,i) = -dist(j)(tmpPred);
       lp(j) = -dist(j)(tmpPred) + log(prior(j));
       if(j == 0){
 	lps = lp(j);
@@ -326,9 +379,53 @@ Type objective_function<Type>::operator() () {
     }
     logpred.col(i) = lp - lps;
   }
+
+
+  if(estimateUnbiasedTestProportions){
+    matrix<Type> theta(thetaIn.rows() + 1,thetaIn.cols());
+    for(int j = 0; j < theta.cols(); ++j){
+      for(int i = 0; i < thetaIn.rows(); ++i)
+	theta(i,j) = exp(thetaIn(i,j));
+      theta(theta.rows()-1,j) = 1.0;
+      theta.col(j) /= theta.col(j).sum();
+    }
+    REPORT(theta);
+    ADREPORT(theta);
+
+    if(trainContributionToTestProportions){
+      for(int i = 0; i < G.size(); ++i)
+	nll -= log(theta(G(i),trainBiasCorrectionGroup(i)));
+    }
+
+    matrix<Type> logpredBiasCorrected(NLEVELS(G),X_pred.cols());
+
+    for(int i = 0; i < logpredNoPrior.cols(); ++i){
+      vector<Type> th = theta.col(testBiasCorrectionGroup(i));
+      vector<Type> lp(NLEVELS(G));
+      Type lps = 0.0;
+      for(int j = 0; j < NLEVELS(G); ++j){
+	lp(j) = logpredNoPrior(j,i) + log(th(j));
+	if(j == 0){
+	  lps = lp(j);
+	}else{
+	  lps = logspace_add(lps,lp(j));
+	}
+      }
+      if(addMisfitCategory)
+	lps = logspace_add(lps,log(th(th.size()-1)));
+      nll -= lps;
+      logpredBiasCorrected.col(i) = lp - lps;
+    }
+    REPORT(logpredBiasCorrected);
+  }
+
+  
   REPORT(logpred);
+  REPORT(logpredNoPrior);
   REPORT(coords);
   REPORT(meanCoords);
+  REPORT(muUse);
+  ADREPORT(muUse);
   
   return nll;
 }

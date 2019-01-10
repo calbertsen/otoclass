@@ -63,7 +63,7 @@ mlld <- function(train, group, test,
     ##                     ))
     ##     lambda <- rep(lambda,length = 3)
     ## }        
-    if(length(lambda) > 1 | lambda <= 0)
+    if(!(length(lambda) == 2 || length(lambda)==1) | any(lambda <= 0))
         stop("Lambda must be a positive scalar.")
     if(!identical(formula, ~1) & (is.null(data) | is.null(dataTest))){
         stop("When a formula is specified, data and dataTest must be given.")
@@ -176,7 +176,7 @@ mlld <- function(train, group, test,
                     logSigma = matrix(log(apply(dat$X,1,sd))+2,n,nlevels(dat$G)),
                     corpar = matrix(corcalc,(n*n-n)/2,nlevels(dat$G)),
                     logDelta = 0,
-                    logLambda = log(lambda),
+                    logLambda = rep(log(lambda),length.out = 2),
                     thetaIn = matrix(0.0,(nlevels(dat$G)-1 + as.numeric(addMisfitCategory))*estimateUnbiasedTestProportions,
                                      nlevels(biasCorrectionGroup)*estimateUnbiasedTestProportions)
                     )
@@ -193,13 +193,17 @@ mlld <- function(train, group, test,
     sigmaMap <- factor(row(par$logSigma))
     map <- list(logSigma = sigmaMap,
                 corpar = corparMap,
-                logDelta = factor(NA)
+                logDelta = factor(NA),
+                logLambda = factor(rep(1:length(lambda),length.out = length(par$logLambda)))
                 )
 
     if(nrow(par$commonMu) > 0){
         cMuMap <- matrix(1:length(par$commonMu),nrow(par$commonMu),ncol(par$commonMu))
         cMuMap[1,] <- NA    
         map$commonMu <- factor(cMuMap)
+    }
+    if(all(is.na(map$commonMu))){
+        map$logLambda <- factor(c(1,NA))
     }
     if(!estimateLambda || featureSelection != "Lp"){
         map$logLambda <- factor(par$logLambda*NA)

@@ -318,6 +318,13 @@ read_image<- function(file,
     }
     km$cluster <- factor(km$cluster)
     levels(km$cluster) <- c("Left","Right")[order(km$centers[,orderIndx])]
+    if(assignSinglesByPosition & nclust == 1){
+        if(km$centers[1,1] < nr/2){
+            levels(km$cluster) <- c("Left")
+        }else{
+            levels(km$cluster) <- c("Right")
+        }
+    }
     if(!assignSinglesByPosition & nclust == 1){
         levels(km$cluster) <- c("Unknown")
     }

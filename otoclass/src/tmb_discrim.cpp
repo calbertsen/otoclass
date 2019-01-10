@@ -280,32 +280,33 @@ Type objective_function<Type>::operator() () {
 	    nll -= dt(mu(i,j,k) / lambda(0),Type(3.0),true) - log(lambda(0));
 	    break;
 	  case 1:
-	    nll -= -fabs(mu(i,j,k)) / lambda(0) - log(2.0 * lambda(0));
+	    nll -= -fabs(mu(i,j,k)) / sigma(j,k) / lambda(0) - log(2.0 * lambda(0));
 	    break;
 	  case 2:
-	    nll -= dnorm(mu(i,j,k),Type(0.0),lambda(0), true); // sigma(i,j) *
+	    nll -= dnorm(mu(i,j,k),Type(0.0),lambda(0) * sigma(j,k), true); // sigma(i,j) *
 	    break;
 	  default:
-	    nll -= my_atomic::Lp(mu(i,j,k),(Type)penalty,lambda(0)); //pow(abs(mu(i,j,k)), penalty) / lambda(0) - log(lambda(0));
+	    nll -= my_atomic::Lp(mu(i,j,k),(Type)penalty,lambda(0) * sigma(j,k)); //pow(abs(mu(i,j,k)), penalty) / lambda(0) - log(lambda(0));
 	  }
 	}
       }
+    vector<Type> sigmaMeans = sigma.rowwise().mean();
     for(int i = 0; i < commonMu.rows(); ++i)
       for(int j = 0; j < commonMu.cols(); ++j){
 	// nll += pow(abs(muCMean(i,j)), penalty) * lambda(1);
 	// nll += pow(abs(mu(i,j,k) - muCMean(i,j)), penalty) * lambda(0); // sigma(i,j) *
 	switch(penalty){
 	case -1:
-	  nll -= dt(commonMu(i,j) / lambda(0),Type(3.0),true) - log(lambda(0));
+	  nll -= dt(commonMu(i,j) / lambda(1),Type(3.0),true) - log(lambda(1));
 	  break;
 	case 1:
-	  nll -= -fabs(commonMu(i,j)) / lambda(0) - log(2.0 * lambda(0));
+	  nll -= -fabs(commonMu(i,j)) / sigmaMeans(j) / lambda(1) - log(2.0 * lambda(1));
 	  break;
 	case 2:
-	  nll -= dnorm(commonMu(i,j),Type(0.0),lambda(0), true); // sigma(i,j) *
+	  nll -= dnorm(commonMu(i,j),Type(0.0),lambda(1) * sigmaMeans(j), true); // sigma(i,j) *
 	  break;
 	default:
-	  nll -= my_atomic::Lp(commonMu(i,j),(Type)penalty,lambda(0)); //pow(abs(mu(i,j,k)), penalty) / lambda(0) - log(lambda(0));
+	  nll -= my_atomic::Lp(commonMu(i,j),(Type)penalty,lambda(1) * sigmaMeans(j)); //pow(abs(mu(i,j,k)), penalty) / lambda(0) - log(lambda(0));
 	}
       }
     // nll += lambda(0) * pow(normR, 1.0/(double)penalty);

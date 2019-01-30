@@ -1,9 +1,11 @@
 
 
 ##' @export
-predict.mlld <- function(x, type = c("class","mean"), newdata = NULL, dataTest = NULL, ...){
+predict.mlld <- function(x, type = c("class","mean","commonMean"), newdata = NULL, dataTest = NULL, se.fit = FALSE, ...){
     type <- match.arg(type)
     if(type == "class"){
+        if(se.fit)
+            warning("se.fit is ignored for class predicitons")
         if(is.null(newdata)){
             return(list(class = x$test_class,
                         posterior = x$test_posterior))
@@ -44,7 +46,7 @@ predict.mlld <- function(x, type = c("class","mean"), newdata = NULL, dataTest =
                               data = dataTest,
                               transpose = FALSE,
                               row.names = FALSE)
-        mu <- x$pl$mu
+        mu <- x$rp$muUse
         estMean <- sapply(1:dim(mu)[3], function(i){
             v <- Xpred %*% mu[,,i]
             colnames(v) <- x$muNames[[2]]
@@ -52,6 +54,27 @@ predict.mlld <- function(x, type = c("class","mean"), newdata = NULL, dataTest =
             return(v)
         }, simplify = FALSE)
         names(estMean) <- x$muNames[[3]]
-        return(estMean)
+        if(!se.fit)
+            return(estMean)
+        if(is.null(x$sdr))
+            stop("The model must be fitted using doSdreport = TRUE")
+        indx <- names(x$sdr$value) == "muUse"
+        covUse <- x$sdr$cov[indx,indx]
+        estSd <- sapply(1:dim(mu)[3], function(i){
+            v <- matrix(NA,nrow(Xpred),dim(mu)[2])
+            for(j in 1:dim(mu)[2]){
+                indxIJ <- array(FALSE, dim(mu))
+                indxIJ[,j,i] <- TRUE
+                indxIJ <- as.vector(indxIJ)
+                v[,j] <- sqrt(diag(Xpred %*% covUse[indxIJ,indxIJ] %*% t(Xpred)))
+            }
+            colnames(v) <- x$muNames[[2]]
+            rownames(v) <- rownames(dataTest)
+            return(v)
+        }, simplify = FALSE)
+        names(estSd) <- x$muNames[[3]]
+        return(list(fit = estMean, se.fit = estSd))
+    }else if(type == "commonMean"){
+        stop("commonMean is not implemented yet")
     }
 }

@@ -225,6 +225,7 @@ mlld <- function(train, group, test,
                          obj$fn,
                          obj$gr,
                          control = control)
+    opt$double_objective <- obj$env$f(obj$env$last.par.best, type="double")
     rp <- obj$report(obj$env$last.par.best)
 
     muNames <- list(rownames(dat$covar),

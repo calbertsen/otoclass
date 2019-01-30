@@ -427,6 +427,7 @@ Type objective_function<Type>::operator() () {
   REPORT(meanCoords);
   REPORT(muUse);
   ADREPORT(muUse);
+  ADREPORT(commonMu);
   
   return nll;
 }

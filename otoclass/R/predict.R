@@ -1,7 +1,7 @@
 
 
 ##' @export
-predict.mlld <- function(x, type = c("class","mean","commonMean"), newdata = NULL, dataTest = NULL, se.fit = FALSE, ...){
+predict.mlld <- function(x, type = c("class","mean"), newdata = NULL, dataTest = NULL, se.fit = FALSE, ...){
     type <- match.arg(type)
     if(type == "class"){
         if(se.fit)
@@ -47,8 +47,14 @@ predict.mlld <- function(x, type = c("class","mean","commonMean"), newdata = NUL
                               transpose = FALSE,
                               row.names = FALSE)
         mu <- x$rp$muUse
+        ttc <- x$termsCommon
+        Xpredc <- model.matrix(ttc,
+                              data = dataTest,
+                              transpose = FALSE,
+                              row.names = FALSE)
+        muc <- x$pl$commonMu
         estMean <- sapply(1:dim(mu)[3], function(i){
-            v <- Xpred %*% mu[,,i]
+            v <- Xpred %*% mu[,,i] + Xpredc %*% muc
             colnames(v) <- x$muNames[[2]]
             rownames(v) <- rownames(dataTest)
             return(v)
@@ -58,15 +64,20 @@ predict.mlld <- function(x, type = c("class","mean","commonMean"), newdata = NUL
             return(estMean)
         if(is.null(x$sdr))
             stop("The model must be fitted using doSdreport = TRUE")
-        indx <- names(x$sdr$value) == "muUse"
+        indx <- which(names(x$sdr$value) %in% c("muUse","commonMu"))
+        names(indx) <- names(x$sdr$value)[indx]
+        isMu <- names(indx) == "mu"
         covUse <- x$sdr$cov[indx,indx]
+        transMat <- cbind(Xpred,Xpredc)               
         estSd <- sapply(1:dim(mu)[3], function(i){
             v <- matrix(NA,nrow(Xpred),dim(mu)[2])
             for(j in 1:dim(mu)[2]){
                 indxIJ <- array(FALSE, dim(mu))
                 indxIJ[,j,i] <- TRUE
                 indxIJ <- as.vector(indxIJ)
-                v[,j] <- sqrt(diag(Xpred %*% covUse[indxIJ,indxIJ] %*% t(Xpred)))
+                indxIJc <- matrix(FALSE, nrow(muc), ncol(muc))
+                indxIJc[,j] <- TRUE
+                v[,j] <- sqrt(diag(transMat %*% covUse[c(indxIJ,indxIJc),c(indxIJ,indxIJc)] %*% t(transMat)))
             }
             colnames(v) <- x$muNames[[2]]
             rownames(v) <- rownames(dataTest)
@@ -74,7 +85,5 @@ predict.mlld <- function(x, type = c("class","mean","commonMean"), newdata = NUL
         }, simplify = FALSE)
         names(estSd) <- x$muNames[[3]]
         return(list(fit = estMean, se.fit = estSd))
-    }else if(type == "commonMean"){
-        stop("commonMean is not implemented yet")
     }
 }

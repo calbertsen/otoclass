@@ -170,8 +170,7 @@ transformPixelMatrix <- function(pic,
         pic[pic > 255] <- 255
     }
     if(floodFillTolerance > 0){
-        pic <- round(.Call("scanlineFill", pic/255, floodFillTolerance) * 255)
-        pic[pic == -255] <- 0
+        pic <- floodfill(pic, floodFillTolerance)
     }
     return(pic)
 }

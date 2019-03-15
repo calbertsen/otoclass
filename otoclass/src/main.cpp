@@ -48,7 +48,7 @@ extern "C" {
     CALLDEF(polygon_area,2),
     CALLDEF(efd2coordSEXP,4),
     CALLDEF(efd,3),
-    CALLDEF(scanlineFill,2),
+    CALLDEF(scanlineFill,5),
     {NULL,NULL,0}
   };
 

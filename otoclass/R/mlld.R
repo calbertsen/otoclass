@@ -42,6 +42,7 @@ mlld <- function(train, group, test,
                  fcbfLambda = 1,
                  onlyObj = FALSE,
                  doSdreport = FALSE,
+                 equalVariance = TRUE,
                  ...){
 ##### Checks #####
     featureSelection <- match.arg(featureSelection)
@@ -187,10 +188,16 @@ mlld <- function(train, group, test,
     ## variance parameter map
     if(independent){
         corparMap <- factor(rep(NA,length(par$corpar)))
-    }else{
+    }else if(equalVariance){
         corparMap <- factor(row(par$corpar))
+    }else{
+        corparMap <- factor(1:length(par$corpar))
     }
-    sigmaMap <- factor(row(par$logSigma))
+    if(equalVariance){
+        sigmaMap <- factor(row(par$logSigma))
+    }else{
+        sigmaMap <- factor(1:length(par$logSigma))
+    }
     map <- list(logSigma = sigmaMap,
                 corpar = corparMap,
                 logDelta = factor(NA),
@@ -268,6 +275,7 @@ mlld <- function(train, group, test,
                 test = test,
                 group = group,
                 data = data,
+                dataTest = dataTest,
                 test_class = clas,
                 test_posterior = posterior,
                 varBetweenGroups = NA,

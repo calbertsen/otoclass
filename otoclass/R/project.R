@@ -8,12 +8,12 @@ calculateVarBetweenGroups.mlld <- function(x, ...){
     if(!is.na(x$varBetweenGroups))
         return(x$varBetweenGroups)
     X <- model.matrix(x$terms,data = x$data)
-    beta <- x$pl$mu
+    beta <- x$rp$muUse
     group <- x$group
     muList <- sapply(1:nrow(X), function(i){
         X[i,] %*% beta[,,group[i]]
     }, simplify = FALSE)
-    muAll <- colMeans(x$train)
+    muAll <- colMeans(x$y)
     Sigma <- Reduce("+",lapply(muList, function(xx) t(xx-muAll) %*% (xx-muAll))) / (nrow(X)-1)
     return(Sigma)    
 }
@@ -27,14 +27,7 @@ calculateVarWithinGroups <- function(x, ...){
 calculateVarWithinGroups.mlld <- function(x, ...){
     if(!is.na(x$varWithinGroups))
         return(x$varWithinGroups)
-    sigmas <- exp(x$pl$logSigma)
-    corpars <- x$pl$corpar
-    Sigma <- Reduce("+",sapply(1:ncol(sigmas), function(i){
-        A <- diag(sigmas[,i], nrow(sigmas), nrow(sigmas))
-        M <- diag(1,nrow(A),nrow(A))
-        M[lower.tri(M)] <- corpars[,i]
-        A%*%(M%*%t(M))%*%t(A)
-    }, simplify = FALSE)) / ncol(sigmas)
+    Sigma <- Reduce("+",vcov(x)) / nlevels(x$group)
     return(Sigma)
 }
 
@@ -55,27 +48,37 @@ projection <- function(x, ...){
 }
 
 ##' @export
-projection.mlld <- function(x, test, ...){
-    if(missing(test)){
-        test <- x$train
+projection.mlld <- function(x, y, group, ...){
+    if(missing(y) & missing(group)){
+        y <- x$y
         group <- x$group
-    }else{
-        group <- factor(rep(NA,nrow(test)),levels = levels(x$group))
+    }else if(!(missing(y) & missing(group))){
+        stop("Both y and group must be given.")
     }
+    if(ncol(y) != ncol(x$y)){
+        stop("The new y does not match the fitted object.")
+    }
+    if(!isTRUE(all.equal(levels(group), levels(x$group)))){
+        stop("The new group does not match the fitted object.")
+    }
+    if(nrow(y) != length(group))
+        stop("y and group does not match.")
+    
     ee <- eigen(solve(x$varWithinGroups) %*% x$varBetweenGroups,symmetric = FALSE)
     noImPart <- sapply(ee$values, function(x) isTRUE(all.equal(Im(x),0)))
     nonZeroRe <- !sapply(ee$values / sum(ee$values),function(x)isTRUE(all.equal(Re(x),0)))
     eeUse <- nonZeroRe & noImPart
     if(any(!noImPart & nonZeroRe))
         warning("Imaginary part of eigen vectors ignored.")
-    evec <- Re(ee$vectors[,eeUse])
-    if(is.data.frame(test))
-        test <- as.matrix(test)
-    projdat <- test %*% evec
+    evec <- Re(ee$vectors[,eeUse, drop = FALSE])
+    rownames(evec) <- x$muNames[[2]]
+    colnames(evec) <- paste0("CD",1:ncol(evec))
+    projdat <- y %*% evec
     colnames(projdat) <- paste0("CD",1:ncol(projdat))
-    rownames(projdat) <- rownames(test)
+    rownames(projdat) <- rownames(y)
     attr(projdat,"relative_importance") <- Re(ee$values[eeUse]) / sum(Re(ee$values[eeUse]))
     attr(projdat,"group") <- group
+    attr(projdat,"directions") <- evec
     class(projdat) <- "projection"
     return(projdat)
 }
@@ -93,7 +96,7 @@ addTrans <- Vectorize(function(name,alpha=1){
 
 
 ##' @export
-plot.projection <- function(x, onlyFirst = FALSE, ...){
+plot.projection <- function(x, onlyFirst = FALSE, xlim = xrng, ylim = yrng, ...){
     group <- attr(x,"group")
     lvl <- levels(attr(x,"group"))
     if(any(is.na(group))){
@@ -107,24 +110,33 @@ plot.projection <- function(x, onlyFirst = FALSE, ...){
     }else{
         args$col <- addTrans(1:nlevels(group),0.3)
     }
+    if(!is.null(args$border)){
+        args$border <- rep(args$border,nlevels(group))
+    }else{
+        args$border <- rep(NA,nlevels(group))
+    }
     if(ncol(x) == 1 | onlyFirst){
         pdList <- split(x, group)
-        dens <- lapply(pdList,density, cut = 0)
+        dens <- lapply(pdList,density)
         xrng <- range(unlist(lapply(dens,function(xx)xx$x)))
         yrng <- range(unlist(lapply(dens,function(xx)xx$y)))
-        if(is.null(args$xlim))
-            args$xlim <- xrng
-        if(is.null(args$ylim))
-            args$ylim <- yrng
+        if(is.null(xlim))
+            xrng <- xlim
+        if(is.null(ylim))
+            yrng <- ylim
         plot(0,0, type = "n",
              xlab = sprintf("CD1 (%.1f %%)",attr(x,"relative_importance")[1]*100),
              ylab = "Density",
+             ylim = yrng,
+             xlim = xrng,             
              ...)
         for(i in 1:length(dens)){
             arg0 <- args
-            arg0$x <- dens[[i]]
+            arg0$x <- c(dens[[i]]$x,rev(dens[[i]]$x))
+            arg0$y <- c(dens[[i]]$y,rev(dens[[i]]$y * 0))
             arg0$col <- args$col[i]
-            do.call(graphics::lines, arg0)
+            arg0$border <- args$border[i]
+            do.call(graphics::polygon, arg0)
         }
     }else{
         args$col <- args$col[group]

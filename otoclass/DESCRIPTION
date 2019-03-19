@@ -1,8 +1,8 @@
 Package: otoclass
 Type: Package
 Title: Otolith Classification and Proportion Estimation
-Version: 0.7.0
-Date: 2018-11-23
+Version: 0.8.0
+Date: 2019-03-19
 Authors@R: person(c("Christoffer","Moesgaard"), "Albertsen",
 	   email = "cmoe@aqua.dtu.dk", role = c("aut", "cre"),
 	   comment = c(ORCID = "0000-0003-0088-4363"))
@@ -19,7 +19,8 @@ Imports:
     tiff,
     Matrix,
     methods,
-    graphics
+    graphics,
+    expm
 Suggests:
     shiny
 LinkingTo: RcppEigen,

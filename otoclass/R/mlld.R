@@ -23,7 +23,12 @@ mlld <- function(## Data related
                  ## Penalty related
                  lp_penalty = 0,
                  lambda = 0.4,
-                 estimateLambda = TRUE,                 
+                 estimateLambda = TRUE,
+                 ## TMixture related
+                 tMixture = 0,
+                 tDf = 5,
+                 estimateTMix = FALSE,
+                 estimateTDf = FALSE,
                  ## Settings
                  independent = FALSE,
                  silent = FALSE,                 
@@ -179,7 +184,9 @@ mlld <- function(## Data related
                     logLambda = rep(log(lambda),length.out = 2),
                     thetaIn = matrix(0.0,nlevels(dat$G)-1,
                                      nlevels(proportionGroup)),
-                    MIn = MIn
+                    MIn = MIn,
+                    tmixpIn = rep(qlogis(tMixture+0.01*as.numeric(estimateTMix)), length = nlevels(dat$G)),
+                    logDf = rep(log(tDf), length = nlevels(dat$G))
                     )
     }
     np <- Reduce("+",lapply(par,length))
@@ -196,14 +203,26 @@ mlld <- function(## Data related
     }
     if(equalVariance){
         sigmaMap <- factor(row(par$logSigma))
+        tMap <- factor(rep(1,length(par$tmixpIn)))
     }else{
         sigmaMap <- factor(1:length(par$logSigma))
+        tMap <- factor(1:length(par$tmixpIn))
     }
- 
+
+    tMixMap <- tMap
+    if(!estimateTMix)
+        tMixMap[] <- NA
+    tDfMap <- tMap
+    if(!estimateTDf)
+        tDfMap[] <- NA
+    
+    
     map <- list(logSigma = sigmaMap,
                 corpar = corparMap,
                 logLambda = factor(rep(1:length(lambda),length.out = length(par$logLambda))),
-                MIn = factor(CMA_map)
+                MIn = factor(CMA_map),
+                tmixpIn = factor(tMixMap),
+                logDf = factor(tDfMap)
                 )
 
     if(nrow(par$commonMu) > 0){

@@ -27,10 +27,10 @@ residuals.mlld <- function(x,...){
         NC <- sum(Muse * th)
         Reduce("+",sapply(1:ncol(pr$posterior),function(j){
             y2 <- CC[[j]] %*% (x$y[i,,drop=TRUE] - pr$fit[i,,j])
-            pnorm(y2,0,1) * th[j] * Muse[j] / NC            
+            (pnorm(y2,0,1) * (1-x$rp$tmixp[j]) + x$rp$tmixp[j]*pt(y2,x$rp$df[j])) * th[j] * Muse[j] / NC            
         }, simplify = FALSE))
     })
-    if(length(x$muNames[[2]]) == 1)
+    if(ncol(x$y) == 1)
         F <- matrix(F,nrow = 1)
     rownames(F) <- x$muNames[[2]]
     colnames(F) <- rownames(x$y)

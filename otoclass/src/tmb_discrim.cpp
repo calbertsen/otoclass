@@ -47,7 +47,102 @@ namespace my_atomic {
 
 
 
+//////////////////////////////////////////////////////////////////
+/////////////// From fishfollower/stockassessment ///////////////
+////////////////////////////////////////////////////////////////
 
+
+template<class Type>
+Type logspace_add_p (Type logx, Type logy, Type p) {
+  return log((Type(1)-p)*exp(logy-logx)+p)+logx; // the order of x and y is taylored for this application 
+}
+
+template<class Type>
+Type logdrobust(Type x, Type p, Type df){
+  Type ld1=dnorm(x,Type(0.0),Type(1.0),true);
+  if(p<Type(1.0e-16)){
+    return ld1;
+  }else{
+    Type ld2=dt(x,df,true);
+    Type logres=logspace_add_p(ld2,ld1,p);
+    return logres;
+  }
+}
+VECTORIZE3_ttt(logdrobust)
+
+template <class Type>
+class MVMIX_t{
+  Type halfLogDetS;         
+  Type p1;                  /*fraction t3*/
+  Type df;
+  matrix<Type> Sigma;       
+  vector<Type> sd;
+  matrix<Type> L_Sigma;
+  matrix<Type> inv_L_Sigma;
+public:
+  MVMIX_t(){}
+  MVMIX_t(matrix<Type> Sigma_, Type p1_, Type df_){
+    setSigma(Sigma_);
+    p1=p1_;
+    df=df_;
+  }
+  matrix<Type> cov(){return Sigma;}
+  void setSigma(matrix<Type> Sigma_){
+    Sigma = Sigma_;
+    sd = sqrt(vector<Type>(Sigma.diagonal()));
+    Eigen::LLT<Eigen::Matrix<Type,Eigen::Dynamic,Eigen::Dynamic> > llt(Sigma);
+    L_Sigma = llt.matrixL();
+    vector<Type> D=L_Sigma.diagonal();
+    halfLogDetS = sum(log(D));
+    inv_L_Sigma = atomic::matinv(L_Sigma);
+  }
+  void setSigma(matrix<Type> Sigma_, Type p1_){
+    setSigma(Sigma_);
+    p1=p1_;
+  }
+  /** \brief Evaluate the negative log density */
+  Type operator()(vector<Type> x){
+    vector<Type> z = inv_L_Sigma*x;
+    return -sum(logdrobust(z,p1,df))+halfLogDetS;
+  }
+  // Type operator()(vector<Type> x, vector<Type> keep){
+  //   matrix<Type> S = Sigma;
+  //   vector<Type> not_keep = Type(1.0) - keep;
+  //   for(int i = 0; i < S.rows(); i++){
+  //     for(int j = 0; j < S.cols(); j++){
+  // 	S(i,j) = S(i,j) * keep(i) * keep(j);
+  //     }
+  //     //S(i,i) += not_keep(i) * pow((Type(1)-p1)*sqrt(Type(0.5)/M_PI)+p1*(Type(1)/M_PI),2); //(t(1))
+  //     S(i,i) += not_keep(i) * pow((Type(1)-p1)*sqrt(Type(0.5)/M_PI)+p1*(Type(2)/(M_PI*sqrt(df))),2);
+  //   }
+  //   return MVMIX_t<Type>(S,p1)(x * keep);
+  // }
+
+  vector<Type> simulate() {
+    int siz = Sigma.rows();
+    vector<Type> x(siz);
+    for(int i=0; i<siz; ++i){
+      Type u = runif(0.0,1.0);
+      if(u<p1){
+        x(i) = rt(asDouble(df));
+      }else{
+        x(i) = rnorm(0.0,1.0);
+      }
+    }
+    x = L_Sigma*x;
+    return x;
+  }
+};
+
+template <class Type>
+MVMIX_t<Type> MVMIX(matrix<Type> Sigma, Type p1){
+  return MVMIX_t<Type>(Sigma,p1);
+}
+
+
+/////////////////////////////////////////////////////////////////////////////////////
+/////////////////// End of code from fishfollower/stockassesment ///////////////////
+///////////////////////////////////////////////////////////////////////////////////
 
 
 
@@ -182,6 +277,9 @@ Type objective_function<Type>::operator() () {
 
   PARAMETER_ARRAY(MIn);
 
+  PARAMETER_VECTOR(tmixpIn);
+  PARAMETER_VECTOR(logDf);
+
   ////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////// Check //////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////
@@ -197,6 +295,9 @@ Type objective_function<Type>::operator() () {
   // Transform lambda
   vector<Type> lambda = exp(-logLambda);
 
+  // Transform df
+  vector<Type> df = exp(logDf);
+  
   // Transform mu
   array<Type> muUse(mu.dim);
   for(int i = 0; i < muUse.dim[0]; ++i)
@@ -212,7 +313,23 @@ Type objective_function<Type>::operator() () {
   for(int i = 0; i < sigma.rows(); ++i)
     for(int j = 0; j < sigma.cols(); ++j)
       sigma(i,j) = exp(logSigma(i,j));
+
   
+  // Construct covariance matrices
+  vector<matrix<Type> > SigmaList(logSigma.cols());
+  for(int k = 0; k < sigma.cols(); ++k){
+    matrix<Type> stmp(sigma.rows(),sigma.rows());
+    stmp.setIdentity();
+    if(stmp.cols() > 1){
+      stmp = UNSTRUCTURED_CORR((vector<Type>)corpar.col(k)).cov();
+    }
+    for(int i = 0; i < sigma.rows(); ++i)
+      for(int j = 0; j < sigma.rows(); ++j)
+	stmp(i,j) *= sigma(i,k) * sigma(j,k);
+    SigmaList(k) = stmp;
+  }
+
+
   
   // Transform theta
   matrix<Type> theta(thetaIn.rows() + 1,thetaIn.cols());
@@ -239,11 +356,18 @@ Type objective_function<Type>::operator() () {
     Mvec(k) = expm(Mtmp);
   }
 
+  // Student's t mixture
+  vector<Type> tmixp(tmixpIn.size());
+  for(int i = 0; i < tmixpIn.size(); ++i)
+    tmixp(i) = 1.0 / (1.0 + exp(-tmixpIn(i)));
+  
   // Prepare observational distributions
-  vector<OTOLITH_t<Type> > dist(NLEVELS(G));
+  vector<MVMIX_t<Type> > dist(NLEVELS(G));
   for(int i = 0; i < NLEVELS(G); ++i)
-    dist(i) = OTOLITH_t<Type>((vector<Type>)corpar.col(i), (vector<Type>)sigma.col(i), modelType);
+    dist(i) = MVMIX_t<Type>(SigmaList(i), tmixp(i), df(i));
+    //    dist(i) = OTOLITH_t<Type>((vector<Type>)corpar.col(i), (vector<Type>)sigma.col(i), modelType);
 
+  
   // Likelihood value
   Type nll = 0.0;
 
@@ -390,6 +514,12 @@ Type objective_function<Type>::operator() () {
   ADREPORT(theta);
 
   REPORT(Mvec);
+
+  REPORT(SigmaList);
+
+  REPORT(tmixp);
+
+  REPORT(df);
   
   return nll;
   }

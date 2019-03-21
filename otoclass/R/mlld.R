@@ -199,7 +199,7 @@ mlld <- function(## Data related
     }else if(equalVariance){
         corparMap <- factor(row(par$corpar))
     }else{
-        corparMap <- factor(1:length(par$corpar))
+        corparMap <- factor(rep(1:length(par$corpar),length = length(par$corpar)))
     }
     if(equalVariance){
         sigmaMap <- factor(row(par$logSigma))
@@ -242,7 +242,6 @@ mlld <- function(## Data related
     npfix <- Reduce("+",lapply(map,function(x)sum(is.na(x))))
     if(np-npfix > nrow(y) / 10)
         warning(sprintf("The model has %s parameters with only %s observations - %.2f observations per parameter. There is a high risk of overfitting.",np-npfix,nrow(y),nrow(y)/(np-npfix))) 
-    
 ##### Make TMB object #####
     obj <- TMB::MakeADFun(dat,par,map,
                           silent = silent, profile = rnd,

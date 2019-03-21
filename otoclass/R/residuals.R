@@ -1,14 +1,19 @@
 
 ##' @export
 vcov.mlld <- function(x,...){
-    sigmas <- exp(x$pl$logSigma)
-    corpars <- x$pl$corpar
-    Sigma <- sapply(1:ncol(sigmas), function(i) {
-        A <- diag(sigmas[, i], nrow(sigmas), nrow(sigmas))
-        M <- diag(1, nrow(A), nrow(A))
-        M[lower.tri(M)] <- corpars[, i]
-        A %*% cov2cor(M %*% t(M)) %*% t(A)
-    }, simplify = FALSE)
+    ## sigmas <- exp(x$pl$logSigma)
+    ## corpars <- x$pl$corpar
+    ## Sigma <- sapply(1:ncol(sigmas), function(i) {
+    ##     A <- diag(sigmas[, i], nrow(sigmas), nrow(sigmas))
+    ##     M <- diag(1, nrow(A), nrow(A))
+    ##     M[lower.tri(M)] <- corpars[, i]
+    ##     A %*% cov2cor(M %*% t(M)) %*% t(A)
+    ## }, simplify = FALSE)
+    Sigma <- lapply(x$rp$SigmaList,function(xx){
+        yy <- xx
+        rownames(yy) <- colnames(yy) <- x$muNames[[2]]
+        yy
+        })
     names(Sigma) <- x$muNames[[3]]
     Sigma
 }

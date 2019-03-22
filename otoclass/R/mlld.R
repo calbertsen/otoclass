@@ -28,11 +28,14 @@ mlld <- function(## Data related
                  tMixture = 0,
                  tDf = 5,
                  estimateTMix = FALSE,
+                 sameTMix = FALSE,
                  estimateTDf = FALSE,
+                 sameTDf = FALSE,
                  ## Settings
                  independent = FALSE,
                  silent = FALSE,                 
                  control = list(iter.max = 100000, eval.max = 100000),
+                 drop.unused.levels = TRUE,
                  onlyObj = FALSE,
                  doSdreport = FALSE,
                  getReportCovariance = FALSE,
@@ -110,7 +113,8 @@ mlld <- function(## Data related
     X <- Matrix::sparse.model.matrix(terms(mf),
                                      data = mf,
                                      transpose = TRUE,
-                                     row.names = FALSE)
+                                     row.names = FALSE,
+                                     drop.unused.levels = drop.unused.levels)
     if(inherits(X,"dgCMatrix"))
         X <- as(X,"dgTMatrix")
 
@@ -120,7 +124,8 @@ mlld <- function(## Data related
     XCom <- Matrix::sparse.model.matrix(terms(mfCommon),
                                         data = mfCommon,
                                         transpose = TRUE,
-                                        row.names = FALSE)
+                                        row.names = FALSE,
+                                        drop.unused.levels = drop.unused.levels)
     if(inherits(XCom,"dgCMatrix"))
         XCom <- as(XCom,"dgTMatrix")
 
@@ -185,8 +190,8 @@ mlld <- function(## Data related
                     thetaIn = matrix(0.0,nlevels(dat$G)-1,
                                      nlevels(proportionGroup)),
                     MIn = MIn,
-                    tmixpIn = rep(qlogis(tMixture+0.01*as.numeric(estimateTMix)), length = nlevels(dat$G)),
-                    logDf = rep(log(tDf), length = nlevels(dat$G))
+                    tmixpIn = matrix(qlogis(tMixture+0.01*as.numeric(estimateTMix)), n, nlevels(dat$G)),
+                    logDf = matrix(log(tDf), n, nlevels(dat$G))
                     )
     }
     np <- Reduce("+",lapply(par,length))
@@ -203,7 +208,7 @@ mlld <- function(## Data related
     }
     if(equalVariance){
         sigmaMap <- factor(row(par$logSigma))
-        tMap <- factor(rep(1,length(par$tmixpIn)))
+        tMap <- factor(row(par$tmixpIn))
     }else{
         sigmaMap <- factor(1:length(par$logSigma))
         tMap <- factor(1:length(par$tmixpIn))
@@ -278,6 +283,7 @@ mlld <- function(## Data related
                 xlevelsCommon = xlevelsCommon,
                 all_vars = colnames(get_all_vars(terms(mf), data)),
                 all_varsCommon = colnames(get_all_vars(terms(mfCommon), data)),
+                drop.unused.levels = drop.unused.levels,
 
                 opt = opt,
                 rp = rp,
@@ -290,7 +296,7 @@ mlld <- function(## Data related
                 confusionMatrixArray = simplify2array(rp$Mvec),
                 confusionLevelTypes = confusionLevelTypes,
 
-                overfit = np-npfix > nrow(y) / 10,
+                overfit = np-npfix > nrow(y) / 10,                
                 muNames = muNames,
                 commonMuNames = commonMuNames,
 

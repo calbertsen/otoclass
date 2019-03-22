@@ -73,15 +73,15 @@ VECTORIZE3_ttt(logdrobust)
 template <class Type>
 class MVMIX_t{
   Type halfLogDetS;         
-  Type p1;                  /*fraction t3*/
-  Type df;
+  vector<Type> p1;                  /*fraction t3*/
+  vector<Type> df;
   matrix<Type> Sigma;       
   vector<Type> sd;
   matrix<Type> L_Sigma;
   matrix<Type> inv_L_Sigma;
 public:
   MVMIX_t(){}
-  MVMIX_t(matrix<Type> Sigma_, Type p1_, Type df_){
+  MVMIX_t(matrix<Type> Sigma_, vector<Type> p1_, vector<Type> df_){
     setSigma(Sigma_);
     p1=p1_;
     df=df_;
@@ -96,7 +96,7 @@ public:
     halfLogDetS = sum(log(D));
     inv_L_Sigma = atomic::matinv(L_Sigma);
   }
-  void setSigma(matrix<Type> Sigma_, Type p1_){
+  void setSigma(matrix<Type> Sigma_, vector<Type> p1_){
     setSigma(Sigma_);
     p1=p1_;
   }
@@ -123,8 +123,8 @@ public:
     vector<Type> x(siz);
     for(int i=0; i<siz; ++i){
       Type u = runif(0.0,1.0);
-      if(u<p1){
-        x(i) = rt(asDouble(df));
+      if(u<p1(i)){
+        x(i) = rt(asDouble(df(i)));
       }else{
         x(i) = rnorm(0.0,1.0);
       }
@@ -135,7 +135,7 @@ public:
 };
 
 template <class Type>
-MVMIX_t<Type> MVMIX(matrix<Type> Sigma, Type p1){
+MVMIX_t<Type> MVMIX(matrix<Type> Sigma, vector<Type> p1){
   return MVMIX_t<Type>(Sigma,p1);
 }
 
@@ -277,8 +277,8 @@ Type objective_function<Type>::operator() () {
 
   PARAMETER_ARRAY(MIn);
 
-  PARAMETER_VECTOR(tmixpIn);
-  PARAMETER_VECTOR(logDf);
+  PARAMETER_MATRIX(tmixpIn);
+  PARAMETER_MATRIX(logDf);
 
   ////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////// Check //////////////////////////////////
@@ -296,7 +296,10 @@ Type objective_function<Type>::operator() () {
   vector<Type> lambda = exp(-logLambda);
 
   // Transform df
-  vector<Type> df = exp(logDf);
+  matrix<Type> df(logDf.rows(), logDf.cols());
+    for(int i = 0; i < df.rows(); ++i)
+      for(int j = 0; j < df.cols(); ++j)
+	df(i,j) = exp(logDf(i,j));
   
   // Transform mu
   array<Type> muUse(mu.dim);
@@ -357,14 +360,15 @@ Type objective_function<Type>::operator() () {
   }
 
   // Student's t mixture
-  vector<Type> tmixp(tmixpIn.size());
-  for(int i = 0; i < tmixpIn.size(); ++i)
-    tmixp(i) = 1.0 / (1.0 + exp(-tmixpIn(i)));
+  matrix<Type> tmixp(tmixpIn.rows(),tmixpIn.cols());
+  for(int i = 0; i < tmixpIn.rows(); ++i)
+    for(int j = 0; j < tmixpIn.cols(); ++j)
+      tmixp(i,j) = 1.0 / (1.0 + exp(-tmixpIn(i,j)));
   
   // Prepare observational distributions
   vector<MVMIX_t<Type> > dist(NLEVELS(G));
   for(int i = 0; i < NLEVELS(G); ++i)
-    dist(i) = MVMIX_t<Type>(SigmaList(i), tmixp(i), df(i));
+    dist(i) = MVMIX_t<Type>(SigmaList(i), (vector<Type>)tmixp.col(i), (vector<Type>)df.col(i));
     //    dist(i) = OTOLITH_t<Type>((vector<Type>)corpar.col(i), (vector<Type>)sigma.col(i), modelType);
 
   

@@ -9,11 +9,13 @@ read_image(file, noiseFactor = NULL, onlyOne = FALSE,
   floodFillTolerance = 0, borderBasedCutOff = FALSE,
   logisticTransform = FALSE, logisticTransformLocation = c("mean",
   "median", "borderMean", "borderMedian"), logisticTransformScale = 1,
-  gaussianBlur = FALSE, gaussianBlurSize = round(0.02 * min(nc, nr)),
-  gaussianBlurSigma = gaussianBlurSize/10, unsharp = FALSE,
-  pixelwise = FALSE, assignSinglesByPosition = TRUE,
-  minCountScale = 0, minCountForMax = 1e-04, reduceCutOffPercent = 0,
-  zeroCutOffPercent = 0.05)
+  gaussianBlur = TRUE, gaussianBlurSize = round(0.02 * min(nc, nr)),
+  gaussianBlurSigma = gaussianBlurSize/10, sobel = TRUE,
+  sobelSize = 7, unsharp = FALSE, pixelwise = FALSE,
+  assignSinglesByPosition = TRUE, minCountScale = 0,
+  minCountForMax = 1e-04, reduceCutOffPercent = 0,
+  zeroCutOffPercent = 0.05, maxOtoliths = 2, minArea = 0.001,
+  cleaningTolerance = 0.2)
 }
 \arguments{
 \item{file}{Image file path}

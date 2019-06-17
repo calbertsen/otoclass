@@ -138,14 +138,16 @@ getPixelMatrix <- function(file, grey=TRUE){
 
 ##' @importFrom stats plogis
 transformPixelMatrix <- function(pic,
+                                 floodFillTolerance = 0,
                                  logisticTransform = FALSE,
                                  logisticTransformLocation = 255/2,
                                  logisticTransformScale = 1,
                                  gaussianBlur = FALSE,
                                  gaussianBlurSize = 3,
                                  gaussianBlurSigma = 1,
-                                 unsharp = FALSE,
-                                 floodFillTolerance = 0) {
+                                 unsharp = FALSE,sobel = FALSE,
+                                 sobelSize = FALSE
+                                 ) {
     if(logisticTransform){
         pic <- stats::plogis(pic,logisticTransformLocation,logisticTransformScale) * 255     
     }
@@ -171,6 +173,16 @@ transformPixelMatrix <- function(pic,
     }
     if(floodFillTolerance > 0){
         pic <- floodfill(pic, floodFillTolerance)
+    }
+    if(sobel){
+        nr <- nrow(pic)
+        nc <- ncol(pic)
+        picOld <- pic
+        borderCol <- mean(c(pic[c(1:(nr*0.02),nr:(nr-nr*0.02)),],pic[,c(1:(nc*0.02),nc:(nc-nc*0.02))]))
+        pic <- matrix(borderCol,nr + (sobelSize-1),nc+(sobelSize-1))
+        pic[((sobelSize-1)/2+1):(nrow(pic)-(sobelSize-1)/2),((sobelSize-1)/2+1):(ncol(pic)-(sobelSize-1)/2)] <- picOld
+        picN <- sobel_filter(pic, sobelSize)
+        pic <- picN / max(picN) * 255
     }
     return(pic)
 }
@@ -202,7 +214,251 @@ transformPixelMatrix <- function(pic,
 ##' @importFrom graphics hist
 ##' @importFrom grDevices contourLines
 ##' @export
-read_image<- function(file,
+read_image<- function(file,                      
+                      noiseFactor = NULL,
+                      onlyOne = FALSE,
+                      minPixelDiff = 0.05 * min(nc,nr),
+                      extreme = TRUE,
+                      floodFillTolerance = 0,
+                      borderBasedCutOff = FALSE,
+                      logisticTransform = FALSE,
+                      logisticTransformLocation = c("mean","median","borderMean","borderMedian"),
+                      logisticTransformScale = 1,
+                      gaussianBlur = TRUE,
+                      gaussianBlurSize = round(0.02 * min(nc,nr)),
+                      gaussianBlurSigma = gaussianBlurSize / 10,
+                      sobel = TRUE,
+                      sobelSize = 7,
+                      unsharp = FALSE,
+                      pixelwise = FALSE,
+                      assignSinglesByPosition = TRUE,
+                      minCountScale = 0,
+                      minCountForMax = 1e-4,
+                      reduceCutOffPercent = 0,
+                      zeroCutOffPercent = 0.05,
+                      maxOtoliths = 2,
+                      minArea = 1e-3,
+                      cleaningTolerance = 0.2
+                      ){
+    r<-getPixelMatrix(file)
+    rv <- t(r[nrow(r):1,])
+    nc <- ncol(rv)
+    nr <- nrow(rv)
+
+    
+    whiteBorder <- mean(c(rv[c(1:(nr*0.02),nr:(nr-nr*0.02)),],rv[,c(1:(nc*0.02),nc:(nc-nc*0.02))])) > 255/2
+    if(whiteBorder){
+        rv <- 255 - rv
+    }
+
+    ## pic <- transformPixelMatrix(rv, gaussianBlur=TRUE,gaussianBlurSize = 11, gaussianBlurSigma = 11/3,sobel=TRUE,sobelSize=7)
+    ## pic <- pic / max(pic)
+    ## pic <- floodfill(pic * 255, cleaningTolerance,0,0)
+    ## pic <- floodfill(pic, cleaningTolerance,nr-1,0)
+    ## pic <- floodfill(pic, cleaningTolerance,0,nc-1)
+    ## pic <- floodfill(pic, cleaningTolerance,nr-1,nc-1)
+    ## pic <- matrix(as.numeric(pic / max(pic) > 0),nr,nc)
+
+    ## ## mrval <- cbind(expand.grid(1:nr,1:nc),Val=as.vector(pic))
+    ## ## km <- stats::kmeans(mrval[mrval[,3]>0,1:2],maxOtoliths)
+    ## cl <- contourLines(1:nc,1:nr,t(pic), nlevels = 1)
+    ## centr <- lapply(cl,function(x)polygon_centroid(cbind(x$x,nr-x$y)))
+    ## p2 <- pic
+    ## for(i in 1:length(centr)){
+    ##     ##     pic <- floodfill(pic, 0, centr[[i]][2], centr[[i]][1], setInitCol = TRUE)
+    ##     p2 <- round(.Call("scanlineFill", p2/255, 1e-4, as.integer(centr[[i]][1]), 
+    ##                       as.integer(centr[[i]][2]), TRUE) * 255)
+    ##     p2[p2 == -255] <- 1
+    ## }
+
+    ## cl <- contourLines(1:nc,1:nr,t(p2), nlevels = 1)
+    ## centr <- lapply(cl,function(x)polygon_centroid(cbind(x$x,x$y)))
+    ## are <- lapply(cl,function(x)abs(polygon_area(cbind(x$x,x$y))))
+    ## largeOto <- which((unlist(are) > minArea * nr * nc))
+    ## keepOto <- largeOto[match(largeOto, head(order(unlist(are), decreasing = TRUE),maxOtoliths))]
+
+    ## return()
+    
+    if(!is.numeric(logisticTransformLocation)){
+        logisticTransformLocation <- match.arg(logisticTransformLocation)
+    }
+    ltl <- NA
+    if(logisticTransform){
+        bordervec <- c(rv[c(1:(nr*0.02),nr:(nr-nr*0.02)),],rv[,c(1:(nc*0.02),nc:(nc-nc*0.02))])
+        if(is.numeric(logisticTransformLocation)){
+            ltl <- logisticTransformLocation[1]
+        }else{
+            ltl <- switch(logisticTransformLocation,
+                          mean = mean(rv),
+                          median = stats::median(rv),
+                          borderMean = mean(bordervec),
+                          borderMedian = stats::median(bordervec)
+                          )
+        }       
+    }
+    rv <- transformPixelMatrix(rv,
+                               logisticTransform = logisticTransform,
+                               logisticTransformLocation = ltl,
+                               logisticTransformScale = logisticTransformScale,
+                               gaussianBlur = gaussianBlur,
+                               gaussianBlurSize = gaussianBlurSize,
+                               gaussianBlurSigma = gaussianBlurSigma,
+                               unsharp = unsharp,
+                               floodFillTolerance = floodFillTolerance)
+   
+    maxrv <- max(rv)
+
+    if(is.null(noiseFactor)){
+        if(borderBasedCutOff){
+            i1 <- stats::quantile(c(rv[c(1:(nr*0.02),nr:(nr-nr*0.02)),],rv[,c(1:(nc*0.02),nc:(nc-nc*0.02))]),0.99)
+        }else{
+            hh<-graphics::hist(rv,breaks=(-1):maxrv + 0.5,plot=FALSE)
+            hd<-hh$density * (hh$counts > nc*nr * minCountScale)
+            ## mv1 <- 1:round(maxrv/2)
+            ## mv2 <- (round(maxrv/2)+1):maxrv
+            mx <- max(which(hh$counts > nc*nr * minCountForMax))
+            mv1 <- 2:round(mx/2)
+            mv2 <- (round(mx/2)+1):mx
+            m1 <- mv1[which.max(hd[mv1 + 1])]
+            m2 <- mv2[which.max(hd[mv2 + 1])]
+            i1 <- max(m1) + which.min(hd[m1:m2 + 1]) - 1
+            i1 <- i1 - (i1 - m1) * reduceCutOffPercent
+        }
+        noiseFactor <- maxrv / i1 
+    }        
+    rv[rv< maxrv/noiseFactor] <- 0
+    cutVal <- maxrv/noiseFactor
+    
+    if(extreme)
+        rv[rv > 0] <- 255
+    
+    ##rvals <- t(matrix(rv,nrow=nr,ncol=nc,byrow=TRUE))
+    lvls <- c("Left","Right")
+    orderIndx <- 1
+    if(!onlyOne){
+        ## reshape2::melt
+        mrval <- cbind(expand.grid(1:nr,1:nc),Val=as.vector(rv))
+
+        mx <- apply(rv,1,mean)
+        ##mx[mx<5] <- 0
+        my <- apply(rv,2,mean)
+        ##my[my<5] <- 0
+        difx <- which(diff(which(mx < maxrv*zeroCutOffPercent))>minPixelDiff)
+        dify <- which(diff(which(my < maxrv*zeroCutOffPercent))>minPixelDiff)
+        checkx <- length(difx)>1
+        checky <- length(dify)>1
+
+        if(any(c(checkx,checky))){
+            nclust <- 2
+            if(!checkx & checky)
+                orderIndx <- 2
+        }else{
+            nclust <- 1
+        }
+        km <- stats::kmeans(mrval[mrval[,3]>0,1:2],nclust)
+        
+    }else{
+        km <- list(cluster = rep(1,length(rv[rv>0])))
+        nclust <- 1
+    }
+    km$cluster <- factor(km$cluster)
+    levels(km$cluster) <- c("Left","Right")[order(km$centers[,orderIndx])]
+    if(assignSinglesByPosition & nclust == 1){
+        if(km$centers[1,1] < nr/2){
+            levels(km$cluster) <- c("Left")
+        }else{
+            levels(km$cluster) <- c("Right")
+        }
+    }
+    if(!assignSinglesByPosition & nclust == 1){
+        levels(km$cluster) <- c("Unknown")
+    }
+    if(nlevels(km$cluster) > 1)
+        km$cluster <- stats::relevel(km$cluster,"Left")
+
+    res <- list()
+    for(i in 1:nlevels(km$cluster)){
+        rv3 <- rv
+        rv3[rv3>0][as.integer(km$cluster) != i] <- 0
+        if(pixelwise){
+            cc <- Conte((rv3))
+            cont <- cbind(cc$X,cc$Y)
+        }else{
+            cc<-grDevices::contourLines(1:nr,1:nc,rv3,levels=ifelse(extreme,255,cutVal))
+            cl <- unlist(lapply(cc,function(x)sum(sapply(2:length(x$x),
+                                                      function(i)LineLength(c(x$x[i],x$y[i]),
+                                                                            c(x$x[i-1],x$y[i-1]))))
+                                ))
+            ## cl <- unlist(lapply(cc,function(x)length(x$x)))
+            cont <- do.call("cbind",cc[[which.max(cl)]][c("x","y")])
+        }
+        res[[i]] <- newStart_image(cont)
+        attr(res[[i]],"Position") <- levels(km$cluster)[i]
+        attr(res[[i]],"File") <- file
+        attr(res[[i]],"NoiseFactor") <- noiseFactor
+        attr(res[[i]],"LogisticTransform") <- list(used = logisticTransform,
+                                                   location = ltl,
+                                                   scale = logisticTransformScale)
+        attr(res[[i]],"GaussianBlur") <- list(used = gaussianBlur & !unsharp,
+                                              size = gaussianBlurSize,
+                                              sigma = gaussianBlurSigma)
+        attr(res[[i]],"floodFillTolerance") <- floodFillTolerance
+        attr(res[[i]],"UnsharpMask") <- list(used = unsharp)
+        attr(res[[i]],"ImagePixels") <- c(nc,nr)
+        attr(res[[i]],"Normalized") <- FALSE
+        attr(res[[i]],"Flipped") <- c(FALSE,FALSE)
+        attr(res[[i]],"Rotated") <- 0
+        attr(res[[i]],"Area") <- polygon_area(res[[i]])
+        class(res[[i]]) <- "otolith_contour"
+    }
+    attr(res,"File") <- file
+    attr(res,"NoiseFactor") <- noiseFactor
+    attr(res,"LogisticTransform") <- list(used = logisticTransform,
+                                          location = ltl,
+                                          scale = logisticTransformScale)
+    attr(res,"GaussianBlur") <- list(used = gaussianBlur & !unsharp,
+                                     size = gaussianBlurSize,
+                                     sigma = gaussianBlurSigma)
+    attr(res,"floodFillTolerance") <- floodFillTolerance
+    attr(res,"UnsharpMask") <- list(used = unsharp)
+    attr(res,"ImagePixels") <- c(nc,nr)
+    class(res) <- "otolith_image"
+    return(res)
+    
+}
+
+##' Normalize an Otolith Image
+##'
+##' @param dat otolith_image object
+##' @param n Number of coordinates to output
+##' @param datCompare Data to compare with
+##' @param forceFlip Force a flip of the otolith?
+##' @param flipByPosition Position (Left/Right) to flip. Use 'No' if otoliths should not be flipped by position.
+##' @return A normalized Otolith Image
+##' @author Christoffer Moesgaard Albertsen
+##' @export
+normalize_image <- function(dat,n,datCompare=NULL,forceFlip=FALSE,flipByPosition = c("No","Left","Right")){
+    flipByPosition <- match.arg(flipByPosition)
+    datNew <- rotate_image(dat)
+    datNew <- center_image(datNew)
+    datNew <- scale_image(datNew)
+    datNew <- newStart_image(datNew)
+    datNew <- setNumObs_image(datNew,n)
+    if(!is.null(datCompare)){
+        dcNorm <- normalize_image(datCompare,n)
+        datNew <- flip_image(datNew,dcNorm,forceFlip)
+    }
+    if(flipByPosition == attr(dat,"Position"))
+        datNew <- flip_image(datNew,datNew,TRUE)
+    attr(datNew,"Normalized") <- TRUE
+    return(datNew)
+}
+
+
+
+
+##' @export
+read_image_old<- function(file,
                       noiseFactor = NULL,
                       onlyOne = FALSE,
                       minPixelDiff = 0.05 * min(nc,nr),
@@ -380,32 +636,3 @@ read_image<- function(file,
     return(res)
     
 }
-
-##' Normalize an Otolith Image
-##'
-##' @param dat otolith_image object
-##' @param n Number of coordinates to output
-##' @param datCompare Data to compare with
-##' @param forceFlip Force a flip of the otolith?
-##' @param flipByPosition Position (Left/Right) to flip. Use 'No' if otoliths should not be flipped by position.
-##' @return A normalized Otolith Image
-##' @author Christoffer Moesgaard Albertsen
-##' @export
-normalize_image <- function(dat,n,datCompare=NULL,forceFlip=FALSE,flipByPosition = c("No","Left","Right")){
-    flipByPosition <- match.arg(flipByPosition)
-    datNew <- rotate_image(dat)
-    datNew <- center_image(datNew)
-    datNew <- scale_image(datNew)
-    datNew <- newStart_image(datNew)
-    datNew <- setNumObs_image(datNew,n)
-    if(!is.null(datCompare)){
-        dcNorm <- normalize_image(datCompare,n)
-        datNew <- flip_image(datNew,dcNorm,forceFlip)
-    }
-    if(flipByPosition == attr(dat,"Position"))
-        datNew <- flip_image(datNew,datNew,TRUE)
-    attr(datNew,"Normalized") <- TRUE
-    return(datNew)
-}
-
-

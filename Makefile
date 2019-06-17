@@ -15,11 +15,11 @@ $(NAMESPACEFILE): $(RFILES)
 	$(R) -q -e 'roxygen2::roxygenise("${PACKAGE}", roclets = c("collate", "namespace", "rd"))'
 	@touch $@
 
-$(TARBALL): $(NAMESPACEFILE) $(CPPFILES)
+$(TARBALL): $(NAMESPACEFILE) $(CPPFILES) ${PACKAGE}/DESCRIPTION
 	@echo "\033[0;32mBuilding package\033[0;0m"
 	$(R) CMD build ${PACKAGE}
 
-build: $(TARBALL)
+build: $(TARBALL) 
 
 $(RCHECK): $(TARBALL)
 	@echo "\033[0;32mChecking package as cran\033[0;0m"

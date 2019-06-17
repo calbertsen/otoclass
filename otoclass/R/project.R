@@ -3,11 +3,12 @@ calculateVarBetweenGroups <- function(x, ...){
     UseMethod("calculateVarBetweenGroups")
 }
 
+##' @importFrom stats model.matrix
 ##' @export
 calculateVarBetweenGroups.mlld <- function(x, ...){
     if(!is.na(x$varBetweenGroups))
         return(x$varBetweenGroups)
-    X <- model.matrix(x$terms,data = x$data)
+    X <- stats::model.matrix(x$terms,data = x$data)
     beta <- x$rp$muUse
     group <- x$group
     muList <- sapply(1:nrow(X), function(i){
@@ -95,6 +96,8 @@ addTrans <- Vectorize(function(name,alpha=1){
 })
 
 
+##' @importFrom stats density
+##' @importFrom graphics plot polygon
 ##' @export
 plot.projection <- function(x, onlyFirst = FALSE, xlim = xrng, ylim = yrng, ...){
     group <- attr(x,"group")
@@ -117,7 +120,7 @@ plot.projection <- function(x, onlyFirst = FALSE, xlim = xrng, ylim = yrng, ...)
     }
     if(ncol(x) == 1 | onlyFirst){
         pdList <- split(x, group)
-        dens <- lapply(pdList,density)
+        dens <- lapply(pdList,stats::density)
         xrng <- range(unlist(lapply(dens,function(xx)xx$x)))
         yrng <- range(unlist(lapply(dens,function(xx)xx$y)))
         if(is.null(xlim))

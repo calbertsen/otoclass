@@ -74,17 +74,19 @@ edge_detect3 <- function(pic){
 }
 
 
-sobel <- function(pic){    
-    k2 <- matrix(c(-1,-2,-1,0,0,0,1,2,1),3,3)
-    r <- convol(pic,k2)
-    return(r)
+sobel_filter <- function(pic, k = 5){
+    K1 <- outer(1:k - (k+1)/2, 1:k - (k+1)/2, function(i,j) ifelse(i==0,0,i/(i^2+j^2)))
+    K2 <- outer(1:k - (k+1)/2, 1:k - (k+1)/2, function(i,j) ifelse(j==0,0,j/(i^2+j^2)))
+    r1 <- convol(pic,K1)
+    r2 <- convol(pic,K2)
+    return(sqrt(r1^2 + r2^2))
 }
 
 
 
 ##' @importFrom stats median dnorm
 gaussian_blur <- function(pic,n = 3, sigma = 1){
-    xx <- 1:n - stats::median(1:n)
+    xx <- 1:n - (n+1)/2
     k2 <- outer(xx,xx, function(x,y) stats::dnorm(x,0,sigma) * stats::dnorm(y,0,sigma))
     r <- convol(pic,k2/sum(k2))
     return(r)

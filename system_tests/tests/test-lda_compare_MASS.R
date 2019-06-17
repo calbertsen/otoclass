@@ -2,7 +2,6 @@
 ######### Compare LDA calculations to the R package MASS #########
 ##################################################################
 
-
 ## Load packages
 library(MASS)
 
@@ -19,14 +18,15 @@ invisible(
         ld1 <- lda(X,S)
         ld2 <- mlld(X,S, silent = TRUE)
         is_equal(as.vector(ld1$means),
-                 ld2$opt$par[names(ld2$opt$par)=="mu"],
+                 as.vector(ld2$rp$muUse),
                  tolerance = 1e-4)
         p1 <- predict(ld1)
+        p2 <- predict(ld2)
         is_equal(p1$posterior,
-                 t(exp(ld2$rp$logpred)),
-                 tolerance = 1e-3)
+                 p2$posterior,
+                 tolerance = 1e-4)
         is_equal(as.numeric(p1$class),
-                 apply(ld2$rp$logpred,2,which.max))
+                 as.numeric(p2$class))
     })
 )
 

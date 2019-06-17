@@ -7,7 +7,7 @@
 ##' @param ... 
 ##' @return 
 ##' @author Christoffer Moesgaard Albertsen
-##' @importFrom stats nlminb cor
+##' @importFrom stats nlminb cor model.frame terms update.formula qlogis .getXlevels get_all_vars
 ##' @importFrom methods as
 ##' @importFrom TMB MakeADFun sdreport
 ##' @importFrom expm logm
@@ -31,6 +31,12 @@ mlld <- function(## Data related
                  sameTMix = FALSE,
                  estimateTDf = FALSE,
                  sameTDf = FALSE,
+                 ## KW distribution related
+                 aParam = 1,
+                 bParam = 1,
+                 estimateKWAParam = FALSE,
+                 estimateKWBParam = FALSE,
+                 useSecondKWParameterization = FALSE, ##estimateKWAParam && estimateKWBParam,
                  ## Settings
                  independent = FALSE,
                  silent = FALSE,                 
@@ -78,16 +84,15 @@ mlld <- function(## Data related
     }else{
         for(i in 1:nlevels(confusionGroup)){
             if(confusionLevelTypes[i] == "Known"){
-                CMA[,,i] <- diag(1,nrow = dim(CMA)[1])
+                CMA[,,i] <-log(diag(1,nrow = dim(CMA)[1]))
             }else if(confusionLevelTypes[i] == "Fixed"){
                 isFixed <- confusionLevelTypes[1:i]=="Fixed"
-                CMA[,,i] <- confusionMatrixArray[,,sum(isFixed)]
+                CMA[,,i] <- log(confusionMatrixArray[,,sum(isFixed)])
             }else if(confusionLevelTypes[i] == "Estimate"){
-                tmpMat <- matrix(0.1/dim(CMA)[1],nrow = dim(CMA)[1], ncol = dim(CMA)[2])
-                diag(tmpMat) <- 0.9
-                CMA[,,i] <- tmpMat
+                CMA[,,i] <- log(matrix(0.1/(dim(CMA)[1]-1),nrow = dim(CMA)[1], ncol = dim(CMA)[2]))
+                diag(CMA[,,i]) <- log(0.9)
             }else if(confusionLevelTypes[i] == "Unknown"){
-                CMA[,,i] <- 1/dim(CMA)[1]
+                CMA[,,i] <- log(matrix(1,nrow = dim(CMA)[1], ncol = dim(CMA)[2]))
             }
         }
     }
@@ -108,9 +113,9 @@ mlld <- function(## Data related
     if(!is.null(data) & !is.data.frame(data))
         data <- as.data.frame(data)
 
-    mf <- model.frame(formula, data)
+    mf <- stats::model.frame(formula, data)
 
-    X <- Matrix::sparse.model.matrix(terms(mf),
+    X <- Matrix::sparse.model.matrix(stats::terms(mf),
                                      data = mf,
                                      transpose = TRUE,
                                      row.names = FALSE,
@@ -119,9 +124,9 @@ mlld <- function(## Data related
         X <- as(X,"dgTMatrix")
 
 ##### Prepare common model matrix #####
-    formulaCommon <- update.formula(formulaCommon, ~ . +1)
-    mfCommon <- model.frame(formulaCommon, data)
-    XCom <- Matrix::sparse.model.matrix(terms(mfCommon),
+    formulaCommon <- stats::update.formula(formulaCommon, ~ . +1)
+    mfCommon <- stats::model.frame(formulaCommon, data)
+    XCom <- Matrix::sparse.model.matrix(stats::terms(mfCommon),
                                         data = mfCommon,
                                         transpose = TRUE,
                                         row.names = FALSE,
@@ -131,15 +136,15 @@ mlld <- function(## Data related
 
 ##### Prepare confusion matrices #####
     MIn <- CMA
-    for(i in 1:dim(MIn)[3]){
-        if(dim(MIn)[1] == 1){
-            MIn[,,i] <- 1
-        }else{
-            MIn[,,i] <- expm::logm(MIn[,,i])
-            diag(MIn[,,i]) <- 1
-        }
-        MIn[,,i] <- log(MIn[,,i])
-    }
+    ## for(i in 1:dim(MIn)[3]){
+    ##     if(dim(MIn)[1] == 1){
+    ##         MIn[,,i] <- 1
+    ##     }else{
+    ##         MIn[,,i] <- expm::logm(MIn[,,i])
+    ##         diag(MIn[,,i]) <- 1
+    ##     }
+    ##     MIn[,,i] <- log(MIn[,,i])
+    ## }
 
 ##### Handle NA in group #####
     Guse <- group
@@ -159,17 +164,18 @@ mlld <- function(## Data related
                 proportionGroup = proportionGroup,
                 confusionGroup = confusionGroup,
                 penalty = lp_penalty,
-                Y_pred = array(0,dim=c(0,0)),
+                Y_pred = matrix(0,0,0),
                 X_pred = as(matrix(0,0,0),"dgTMatrix"),
                 XCom_pred = as(matrix(0,0,0),"dgTMatrix"),
-                proportionGroup_pred = factor()
+                proportionGroup_pred = factor(levels=levels(Guse)),
+                kw_idparam = as.integer(useSecondKWParameterization)
                 )
     
 ##### Parameters for TMB #####
     n <- nrow(dat$Y)
     ## par list
     mndim <- c(nrow(dat$X), nrow(dat$Y), nlevels(dat$G))
-    mn <- array(rnorm(prod(mndim),0,0.001), dim = mndim)
+    mn <- array(0.1, dim = mndim)
     ##mn <- sapply(levels(dat$G),function(i)apply(dat$X[,dat$G==i,drop=FALSE],1,mean))
     if(independent){
         corcalc <- 0
@@ -182,16 +188,29 @@ mlld <- function(## Data related
         if(!is.null(cl$lambda))
             par$logLambda <- log(lambda)
     }else{
+        sd2 <- function(x){
+            if(length(x) == 1)
+                return(1)
+            return(sd(x))
+        }
+        if(estimateTMix && missing(tMixture)){
+            tMixture <- 0.05
+        }
+        if(estimateTMix){
+            tMixture <- (1.0 - .Machine$double.eps) * (tMixture - .5) + .5
+        }
         par <- list(mu = mn,
                     commonMu = matrix(0,nrow(dat$XCom),nrow(dat$Y)),
-                    logSigma = matrix(log(apply(dat$Y,1,sd))+2,n,nlevels(dat$G)),
+                    logSigma = matrix(log(apply(dat$Y,1,sd2))+2,n,nlevels(dat$G)),
                     corpar = matrix(corcalc,(n*n-n)/2,nlevels(dat$G)),
                     logLambda = rep(log(lambda),length.out = 2),
                     thetaIn = matrix(0.0,nlevels(dat$G)-1,
                                      nlevels(proportionGroup)),
                     MIn = MIn,
-                    tmixpIn = matrix(qlogis(tMixture+0.01*as.numeric(estimateTMix)), n, nlevels(dat$G)),
-                    logDf = matrix(log(tDf), n, nlevels(dat$G))
+                    tmixpIn = matrix(stats::qlogis(tMixture), n, nlevels(dat$G)),
+                    logDf = matrix(log(tDf), n, nlevels(dat$G)),
+                    kw1 = matrix(log(aParam), n, nlevels(dat$G)),
+                    kw2 = matrix(log(bParam), n, nlevels(dat$G))
                     )
     }
     np <- Reduce("+",lapply(par,length))
@@ -220,14 +239,25 @@ mlld <- function(## Data related
     tDfMap <- tMap
     if(!estimateTDf)
         tDfMap[] <- NA
-    
+
+    KWMapA <- tMap
+    if(!estimateKWAParam)
+        KWMapA[] <- NA
+
+    ## logA and logB are not identifiable when the KW is scaled and moved
+    KWMapB <- tMap
+    if(!estimateKWBParam)
+        KWMapB[] <- NA
+
     
     map <- list(logSigma = sigmaMap,
                 corpar = corparMap,
                 logLambda = factor(rep(1:length(lambda),length.out = length(par$logLambda))),
                 MIn = factor(CMA_map),
                 tmixpIn = factor(tMixMap),
-                logDf = factor(tDfMap)
+                logDf = factor(tDfMap),
+                kw1 = factor(KWMapA),
+                kw2 = factor(KWMapB)
                 )
 
     if(nrow(par$commonMu) > 0){
@@ -258,6 +288,8 @@ mlld <- function(## Data related
                          obj$gr,
                          control = control)
     opt$double_objective <- obj$env$f(obj$env$last.par.best, type="double")
+    opt$gradient <- obj$gr(opt$par)
+    
     rp <- obj$report(obj$env$last.par.best)
 
     muNames <- list(rownames(dat$covar),
@@ -268,21 +300,23 @@ mlld <- function(## Data related
 
  
     if(doSdreport){
-        sdr <- TMB::sdreport(obj,opt$par, getReportCovariance = getReportCovariance)
+        opt$hessian <- stats::optimHess(opt$par, obj$fn, obj$gr)
+        sdr <- TMB::sdreport(obj,opt$par, hessian.fixed = opt$hessian, getReportCovariance = getReportCovariance)
     }else{
+        opt$hessian <- NULL
         sdr <- NULL
     }
 
-    xlevels <- .getXlevels(terms(mf), mf)
-    xlevelsCommon <- .getXlevels(terms(mfCommon), mfCommon)
+    xlevels <- stats::.getXlevels(stats::terms(mf), mf)
+    xlevelsCommon <- stats::.getXlevels(stats::terms(mfCommon), mfCommon)
 
     res <- list(call = cl,
-                terms = terms(mf),
-                termsCommon = terms(mfCommon),
+                terms = stats::terms(mf),
+                termsCommon = stats::terms(mfCommon),
                 xlevels = xlevels,
                 xlevelsCommon = xlevelsCommon,
-                all_vars = colnames(get_all_vars(terms(mf), data)),
-                all_varsCommon = colnames(get_all_vars(terms(mfCommon), data)),
+                all_vars = colnames(stats::get_all_vars(stats::terms(mf), data)),
+                all_varsCommon = colnames(stats::get_all_vars(stats::terms(mfCommon), data)),
                 drop.unused.levels = drop.unused.levels,
 
                 opt = opt,

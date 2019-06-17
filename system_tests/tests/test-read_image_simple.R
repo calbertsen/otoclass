@@ -71,9 +71,8 @@ invisible(
         spim <- SpatialPolygons(list(Polygons(list(Polygon(im[[1]][,1:2])),1L)),1L)
         spx <- SpatialPolygons(list(Polygons(list(Polygon(xx)),1L)),1L)
         areaX <- Reduce("+",lapply(spx@polygons,function(x)x@area))
-        spdiff <- gDifference(spim,spx)
-
-        is_true(Reduce("+",lapply(spdiff@polygons,function(x)x@area)) / areaX < 0.3 / 1000 )##prod(picDim) < 0.1 / 1000)
+        spdiff <- gSymdifference(spim,spx)
+        is_true(Reduce("+",lapply(spdiff@polygons,function(x)x@area)) / areaX < 0.6 / 1000 )##prod(picDim) < 0.1 / 1000)
     })
 )
 
@@ -103,9 +102,8 @@ invisible(
         spim <- SpatialPolygons(list(Polygons(list(Polygon(im[[1]][,1:2])),1L)),1L)
         spx <- SpatialPolygons(list(Polygons(list(Polygon(xx)),1L)),1L)
         areaX <- Reduce("+",lapply(spx@polygons,function(x)x@area))
-        spdiff <- gDifference(spim,spx)
-
-        is_true(Reduce("+",lapply(spdiff@polygons,function(x)x@area)) / areaX < 0.3 / 1000 )## / prod(picDim) < 0.1 / 1000)
+        spdiff <- gSymdifference(spim,spx)
+        is_true(Reduce("+",lapply(spdiff@polygons,function(x)x@area)) / areaX < 0.6 / 1000 )## / prod(picDim) < 0.1 / 1000)
     })
 )
 

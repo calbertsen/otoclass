@@ -1,3 +1,5 @@
+##' @importFrom stats nlminb optimHess
+##' @importFrom utils head
 ##' @export
 biascorrect <- function(assigned, cv, method = c("mle","mi")){
     if(!is.factor(assigned))
@@ -42,8 +44,8 @@ biascorrect <- function(assigned, cv, method = c("mle","mi")){
     }
 
 
-    opt <- nlminb(head(X*0.0,-1), objective, gradient)
-    he <- optimHess(opt$par,objective, gradient)
+    opt <- stats::nlminb(utils::head(X*0.0,-1), objective, gradient)
+    he <- stats::optimHess(opt$par,objective, gradient)
     gr <- grf(opt$par)
     covar <- gr %*% solve(he) %*% t(gr)
     tab <- cbind(f(opt$par), sqrt(diag(covar)))

@@ -1,22 +1,22 @@
 
 
 ##' @export
-predict.mlld <- function(x, y = NULL, data = NULL,proportionGroup = NULL, prior = NULL, se.fit = FALSE, ...){
-    if(is.null(y)){ ## Use fitted data
+predict.mlld <- function(object, y = NULL, data = NULL,proportionGroup = NULL, prior = NULL, se.fit = FALSE, ...){
+    if(is.null(y) & !se.fit){ ## Use fitted data
         if(!is.null(data))
             message("data is ignored when y is not given.")
-        rp <- x$rp
-        rn<- rownames(x$y)
+        rp <- object$rp
+        rn<- rownames(object$y)
         posterior <- t(exp(rp$posterior_logprobability))
         fit <- aperm(rp$posterior_mean,c(2,1,3))
- 
-        if(se.fit){
-            if(is.null(x$sdr))
-                stop("The object must be fitted with doSdreport = TRUE to use se.fit")
-            ssdr <- TMB::summary.sdreport(x$sdr)
-        }
-
     }else{
+
+        if(is.null(y)){
+            if(!is.null(data))
+                message("data is ignored when y is not given.")
+            y <- object$y
+            data <- object$data
+        }
         if(!is.matrix(y))
             if(is.vector(y)){
                 y <- matrix(y,ncol = 1)
@@ -25,42 +25,42 @@ predict.mlld <- function(x, y = NULL, data = NULL,proportionGroup = NULL, prior 
             }
         ## Check size of y:
 
-        dat <- x$tmb_data
+        dat <- object$tmb_data
         if(is.null(data))
             data <- data.frame(ID = 1:nrow(y))
         dat$Y_pred <- t(y)
-        dat$X_pred <- Matrix::sparse.model.matrix(x$terms,
+        dat$X_pred <- Matrix::sparse.model.matrix(object$terms,
                                                   data = data,
                                                   transpose = TRUE,
                                                   row.names = FALSE,
-                                                  xlev = x$xlevels)
+                                                  xlev = object$xlevels)
         if(inherits(dat$X_pred,"dgCMatrix"))
             dat$X_pred <- as(dat$X_pred,"dgTMatrix")
-        dat$XCom_pred <- Matrix::sparse.model.matrix(x$termsCommon,
+        dat$XCom_pred <- Matrix::sparse.model.matrix(object$termsCommon,
                                                      data = data,
                                                      transpose = TRUE,
                                                      row.names = FALSE,
-                                                     xlev = x$xlevelsCommon)
+                                                     xlev = object$xlevelsCommon)
         if(inherits(dat$XCom_pred,"dgCMatrix"))
             dat$XCom_pred <- as(dat$XCom_pred,"dgTMatrix")
         if(is.null(proportionGroup) & is.null(prior)){
-            proportionGroup_pred <- rep(levels(x$proportionGroup)[1],ncol(dat$Y_pred))
+            proportionGroup_pred <- rep(levels(object$proportionGroup)[1],ncol(dat$Y_pred))
         }else if(is.null(proportionGroup) & !is.null(prior)){
             ## Change this to use a specified prior!!!
-            proportionGroup_pred <- rep(levels(x$proportionGroup)[1],ncol(dat$Y_pred))
+            proportionGroup_pred <- rep(levels(object$proportionGroup)[1],ncol(dat$Y_pred))
         }else{
             proportionGroup_pred <- proportionGroup
         }
-        proportionGroup_pred <- factor(proportionGroup_pred, levels = levels(x$proportionGroup))
+        proportionGroup_pred <- factor(proportionGroup_pred, levels = levels(object$proportionGroup))
         if(any(is.na(proportionGroup_pred)))
             stop("proportionGroup must match the levels from the fitted object")
 
         pgp <- as.integer(proportionGroup_pred)-1
-        attr(pgp,"levels") <- levels(x$proportionGroup)
+        attr(pgp,"levels") <- levels(object$proportionGroup)
         dat$proportionGroup_pred <- pgp
 
-        obj <- TMB::MakeADFun(dat,x$pl,x$tmb_map,
-                              silent = x$silent, random = x$tmb_random,
+        obj <- TMB::MakeADFun(dat,object$pl,object$tmb_map,
+                              silent = object$silent, profile = object$tmb_random,
                               DLL = "otoclass")
         rp <- obj$report(obj$env$last.par)
         rn <- names(y)
@@ -69,27 +69,27 @@ predict.mlld <- function(x, y = NULL, data = NULL,proportionGroup = NULL, prior 
         fit <- aperm(rp$pred_posterior_mean,c(2,1,3))
 
         if(se.fit){
-            if(!is.null(x$sdr)){
-                he <- solve(x$sdr$cov.fixed)
+            if(!is.null(object$sdr)){
+                he <- solve(object$sdr$cov.fixed)
             }else{
                 he <- NULL
             }
-            sdr <- TMB::sdreport(obj,x$opt$par,he, getReportCovariance = FALSE)
+            sdr <- TMB::sdreport(obj,object$opt$par,he, getReportCovariance = FALSE)
             ssdr <- TMB::summary.sdreport(sdr)
         }
     }
 
-    colnames(posterior) <- x$muNames[[3]]
+    colnames(posterior) <- object$muNames[[3]]
     rownames(posterior) <- rn
     clas <- colnames(posterior)[apply(posterior,1,which.max)]
-    dimnames(fit) <- list(rn,x$muNames[[2]],x$muNames[[3]])
+    dimnames(fit) <- list(rn,object$muNames[[2]],object$muNames[[3]])
     res <- list(class=clas,
                 posterior = posterior,
                 fit = fit)
     if(se.fit){
-        if(is.null(x$sdr))
+        if(is.null(object$sdr))
             stop("The object must be fitted with doSdreport = TRUE to use se.fit")
-        se.fit <- aperm(array(ssdr[rownames(ssdr) == "posterior_mean",2],dim = c(dim(fit)[c(2,1,3)])),c(2,1,3))
+        se.fit <- aperm(array(ssdr[rownames(ssdr) == "pred_posterior_mean",2],dim = c(dim(fit)[c(2,1,3)])),c(2,1,3))
         res$se.fit <- se.fit
     }
     

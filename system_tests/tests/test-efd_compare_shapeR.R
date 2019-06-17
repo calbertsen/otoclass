@@ -5,8 +5,9 @@
 
 
 ## Load packages
-library(shapeR)
-
+if(!require(shapeR)){
+    message("shapeR not installed. Skipping tests.")
+}else{
 set.seed(1)
 
 ## Test EFD calculation
@@ -60,3 +61,5 @@ invisible(
             is_equal(xx1,xx2[-nrow(xx2),])
     })
 )
+
+}

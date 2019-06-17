@@ -33,7 +33,10 @@ run_tests <- function(package,
     lf <- list.files(dir,"^helper(-|_).+\\.R", full.names = TRUE)
     invisible(sapply(lf,sys.source,envir=env, keep.source = TRUE))
     lftest <- list.files(dir,"^test(-|_).+\\.R", full.names = TRUE)
-    invisible(sapply(lftest,sys.source,envir=env, keep.source = TRUE, toplevel.env=getNamespace(package)))
+    invisible(sapply(lftest,function(f){
+        cat(f,"\n")
+        sys.source(f,envir=env, keep.source = TRUE, toplevel.env=getNamespace(package))
+    }))
     unloadNamespace(getPackageName(env))
     env$Test
 }

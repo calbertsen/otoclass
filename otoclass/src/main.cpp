@@ -19,6 +19,14 @@
 
 extern "C" {
 
+  
+SEXP logspace_add_p (SEXP logx, SEXP logy, SEXP p);
+SEXP logdkwmix(SEXP x, SEXP p, SEXP df, SEXP a, SEXP b);
+SEXP logpkwmix(SEXP x, SEXP p, SEXP df, SEXP a, SEXP b);
+SEXP logdkwmixE0(SEXP x, SEXP p, SEXP df, SEXP a, SEXP b);
+SEXP logpkwmixE0(SEXP x, SEXP p, SEXP df, SEXP a, SEXP b);
+  
+
 #include <R_ext/Rdynload.h>
 #define CALLDEF(name,n) {#name, (DL_FUNC) &name, n}
  
@@ -46,9 +54,17 @@ extern "C" {
     CALLDEF(convol2d,2),
     CALLDEF(knn,5),
     CALLDEF(polygon_area,2),
+    CALLDEF(polygon_centroid,2),
     CALLDEF(efd2coordSEXP,4),
     CALLDEF(efd,3),
     CALLDEF(scanlineFill,5),
+
+    CALLDEF(logspace_add_p,3),
+    CALLDEF(logdkwmix,5),
+    CALLDEF(logpkwmix,5),
+    CALLDEF(logdkwmixE0,5),
+    CALLDEF(logpkwmixE0,5),
+    
     {NULL,NULL,0}
   };
 

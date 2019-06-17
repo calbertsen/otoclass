@@ -22,7 +22,6 @@ Imports:
     graphics,
     expm
 Suggests:
-    shiny
 LinkingTo: RcppEigen,
 	   TMB
 RoxygenNote: 6.1.1

@@ -72,7 +72,7 @@ invisible(
         spx <- SpatialPolygons(list(Polygons(list(Polygon(xx)),1L)),1L)
         areaX <- Reduce("+",lapply(spx@polygons,function(x)x@area))
         spdiff <- gSymdifference(spim,spx)
-        is_true(Reduce("+",lapply(spdiff@polygons,function(x)x@area)) / areaX < 0.6 / 1000 )##prod(picDim) < 0.1 / 1000)
+        is_true(Reduce("+",lapply(spdiff@polygons,function(x)x@area)) / areaX < 6 / 1000 )##prod(picDim) < 0.1 / 1000)
     })
 )
 
@@ -103,7 +103,7 @@ invisible(
         spx <- SpatialPolygons(list(Polygons(list(Polygon(xx)),1L)),1L)
         areaX <- Reduce("+",lapply(spx@polygons,function(x)x@area))
         spdiff <- gSymdifference(spim,spx)
-        is_true(Reduce("+",lapply(spdiff@polygons,function(x)x@area)) / areaX < 0.6 / 1000 )## / prod(picDim) < 0.1 / 1000)
+        is_true(Reduce("+",lapply(spdiff@polygons,function(x)x@area)) / areaX < 6 / 1000 )## / prod(picDim) < 0.1 / 1000)
     })
 )
 
@@ -113,9 +113,10 @@ if(FALSE){
     par(bg="white", mar = c(0,0,0,0), oma = c(0,0,0,0))
     plot.new()
     par(usr = c(1,100,1,100))
-    polygon(c(1,sqrt(0.3),sqrt(0.3),1,1) + 50-0.5,
-            c(1,1,sqrt(0.3),sqrt(0.3),1) + 50-0.5,
+    polygon(c(0,sqrt(6),sqrt(6),0,0) + 50-0.5,
+            c(0,0,sqrt(6),sqrt(6),0) + 50-0.5,
             border=NA,col="black")
     box()
     ##dev.off()
 }
+

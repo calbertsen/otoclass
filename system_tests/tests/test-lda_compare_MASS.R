@@ -19,14 +19,13 @@ invisible(
         ld2 <- mlld(X,S, silent = TRUE)
         is_equal(as.vector(ld1$means),
                  as.vector(ld2$rp$muUse),
-                 tolerance = 1e-4)
+                 tolerance = 2e-4)
         p1 <- predict(ld1)
         p2 <- predict(ld2)
         is_equal(p1$posterior,
                  p2$posterior,
-                 tolerance = 1e-4)
+                 tolerance = 2e-4)
         is_equal(as.numeric(p1$class),
                  as.numeric(p2$class))
     })
 )
-

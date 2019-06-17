@@ -38,7 +38,7 @@ for(i in 1:nrow(efds)){
     spx <- SpatialPolygons(list(Polygons(list(Polygon(xx)),1L)),1L)
     areaX <- Reduce("+",lapply(spx@polygons,function(x)x@area))
     spdiff <- gSymdifference(spim,spx)
-    is_true(Reduce("+",lapply(spdiff@polygons,function(x)x@area)) / areaX < 1 / 1000 )## / prod(picDim) < 0.1 / 1000)
+    is_true(Reduce("+",lapply(spdiff@polygons,function(x)x@area)) / areaX < 7 / 1000 )## / prod(picDim) < 0.1 / 1000)
 }
 
 
@@ -69,6 +69,6 @@ for(i in 1:nrow(efds)){
     spx <- SpatialPolygons(list(Polygons(list(Polygon(xx)),1L)),1L)
     areaX <- Reduce("+",lapply(spx@polygons,function(x)x@area))
     spdiff <- gSymdifference(spim,spx)
-    is_true(Reduce("+",lapply(spdiff@polygons,function(x)x@area)) / areaX < 1 / 1000 )## / prod(picDim) < 0.1 / 1000)
+    is_true(Reduce("+",lapply(spdiff@polygons,function(x)x@area)) / areaX < 7 / 1000 )## / prod(picDim) < 0.1 / 1000)
 }
 

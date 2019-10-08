@@ -47,7 +47,8 @@ mlld <- function(## Data related
                  getReportCovariance = FALSE,
                  equalVariance = TRUE,
                  confusionMatrixArray = NULL,
-                 confusionLevelTypes = levels(confusionGroup),  ## Possible values: c("Known","Fixed","Estimate","Unknown")               
+                 confusionLevelTypes = levels(confusionGroup),  ## Possible values: c("Known","Fixed","Estimate","Unknown")
+                 prior = NULL,
                  ...){
     
     cl <- match.call()
@@ -105,7 +106,6 @@ mlld <- function(## Data related
             CMA_map[,,i] <- NA
         }
     }
-    
   
 ##### Prepare model matrix #####
     if(is.null(data) & identical(formula,~1) & identical(formulaCommon, ~1))
@@ -172,6 +172,23 @@ mlld <- function(## Data related
                 )
     
 ##### Parameters for TMB #####
+
+    ## Prepare prior
+    if(is.null(prior)){
+        thetaIn <- matrix(0.0,nlevels(dat$G)-1,
+                          nlevels(proportionGroup))
+        thetaMap <- NULL
+    }else{
+        if(is.vector(prior))
+            prior <- matrix(prior,nrow = nlevels(Guse), ncol = nlevels(proportionGroup))
+        td <- 1 / prior[nrow(prior),]
+        thetaIn <- log(prior[-nrow(prior),,drop = FALSE] * matrix(td,nrow(prior) - 1, ncol(prior)))
+        thetaIn[is.na(thetaIn)] <- 0
+        thetaMap <- matrix(NA,nrow(prior) - 1,ncol(prior), byrow=TRUE)
+        if(any(is.na(prior[-nrow(prior),])))
+            thetaMap[is.na(prior[-nrow(prior),])] <- 1:sum(is.na(prior[-nrow(prior), ]))
+    }
+
     n <- nrow(dat$Y)
     ## par list
     mndim <- c(nrow(dat$X), nrow(dat$Y), nlevels(dat$G))
@@ -204,8 +221,7 @@ mlld <- function(## Data related
                     logSigma = matrix(log(apply(dat$Y,1,sd2))+2,n,nlevels(dat$G)),
                     corpar = matrix(corcalc,(n*n-n)/2,nlevels(dat$G)),
                     logLambda = rep(log(lambda),length.out = 2),
-                    thetaIn = matrix(0.0,nlevels(dat$G)-1,
-                                     nlevels(proportionGroup)),
+                    thetaIn = thetaIn,
                     MIn = MIn,
                     tmixpIn = matrix(stats::qlogis(tMixture), n, nlevels(dat$G)),
                     logDf = matrix(log(tDf), n, nlevels(dat$G)),
@@ -257,9 +273,11 @@ mlld <- function(## Data related
                 tmixpIn = factor(tMixMap),
                 logDf = factor(tDfMap),
                 kw1 = factor(KWMapA),
-                kw2 = factor(KWMapB)
+                kw2 = factor(KWMapB)                
                 )
-
+    if(!is.null(thetaMap))
+        map$thetaIn = factor(thetaMap)
+    
     if(nrow(par$commonMu) > 0){
         cMuMap <- matrix(1:length(par$commonMu),nrow(par$commonMu),ncol(par$commonMu))
         cMuMap[1,] <- NA    

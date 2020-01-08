@@ -686,21 +686,22 @@ Type objective_function<Type>::operator() () {
   ////////////////////////////////////////////////////////////////////////////
 
   if(penalty != 0){
+    Type nll_pen = 0.0;
     for(int i = 0; i < mu.dim[0]; ++i)
       for(int j = 0; j < mu.dim[1]; ++j){
 	for(int k = 0; k < mu.dim[2]; ++k){
 	  switch(penalty){
 	  case -1:
-	    nll -= dt(mu(i,j,k) / lambda(0),Type(3.0),true) - log(lambda(0));
+	    nll_pen -= dt(mu(i,j,k) / lambda(0),Type(3.0),true) - log(lambda(0));
 	    break;
 	  case 1:
-	    nll -= -fabs(mu(i,j,k)) / sigma(j,k) / lambda(0) - log(2.0 * lambda(0));
+	    nll_pen -= -fabs(mu(i,j,k)) / sigma(j,k) / lambda(0) - log(2.0 * lambda(0));
 	    break;
 	  case 2:
-	    nll -= dnorm(mu(i,j,k),Type(0.0),lambda(0) * sigma(j,k), true);
+	    nll_pen -= dnorm(mu(i,j,k),Type(0.0),lambda(0) * sigma(j,k), true);
 	    break;
 	  default:
-	    nll -= Lp(mu(i,j,k),(Type)penalty,lambda(0) * sigma(j,k));
+	    nll_pen -= Lp(mu(i,j,k),(Type)penalty,lambda(0) * sigma(j,k));
 	  }
 	}
       }
@@ -709,18 +710,19 @@ Type objective_function<Type>::operator() () {
       for(int j = 0; j < commonMu.cols(); ++j){
 	switch(penalty){
 	case -1:
-	  nll -= dt(commonMu(i,j) / lambda(1),Type(3.0),true) - log(lambda(1));
+	  nll_pen -= dt(commonMu(i,j) / lambda(1),Type(3.0),true) - log(lambda(1));
 	  break;
 	case 1:
-	  nll -= -fabs(commonMu(i,j)) / sigmaMeans(j) / lambda(1) - log(2.0 * lambda(1));
+	  nll_pen -= -fabs(commonMu(i,j)) / sigmaMeans(j) / lambda(1) - log(2.0 * lambda(1));
 	  break;
 	case 2:
-	  nll -= dnorm(commonMu(i,j),Type(0.0),lambda(1) * sigmaMeans(j), true);
+	  nll_pen -= dnorm(commonMu(i,j),Type(0.0),lambda(1) * sigmaMeans(j), true);
 	  break;
 	default:
-	  nll -= Lp(commonMu(i,j),(Type)penalty,lambda(1) * sigmaMeans(j));
+	  nll_pen -= Lp(commonMu(i,j),(Type)penalty,lambda(1) * sigmaMeans(j));
 	}
       }
+      nll += nll_pen;
   }
 
   ////////////////////////////////////////////////////////////////////////////

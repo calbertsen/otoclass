@@ -633,7 +633,8 @@ Type objective_function<Type>::operator() () {
 
   
   // Likelihood value
-  Type nll = 0.0;
+  //Type nll = 0.0;
+  parallel_accumulator<Type> nll(this);
 
   
   ////////////////////////////////////////////////////////////////////////////
@@ -729,6 +730,8 @@ Type objective_function<Type>::operator() () {
   array<Type> pred_posterior_mean(Y_pred.rows(), Y_pred.cols(), NLEVELS(G));
   matrix<Type> pred_posterior_logprobability(NLEVELS(G), Y_pred.cols());
   
+  if( isDouble<Type>::value && TMB_OBJECTIVE_PTR -> current_parallel_region<0 ){
+  
   for(int i = 0; i < Y_pred.cols(); ++i){ // Loop over individuals
     vector<Type> th = theta.col(proportionGroup_pred(i));
     Type postProbNorm = 0.0;
@@ -754,6 +757,7 @@ Type objective_function<Type>::operator() () {
       pred_posterior_logprobability(j,i) -= postProbNorm;
   }
   
+  }
   ////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////// Output //////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////

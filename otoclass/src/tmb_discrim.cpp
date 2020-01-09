@@ -645,6 +645,7 @@ Type objective_function<Type>::operator() () {
   matrix<Type> posterior_logprobability(NLEVELS(G), Y.cols());
   
   for(int i = 0; i < Y.cols(); ++i){ // Loop over individuals
+    Type nll_est = 0.0;
     vector<Type> th = theta.col(proportionGroup(i));
     vector<Type> Muse = Mvec(confusionGroup(i)).row(G(i));
     Type NormalizationConstant = (Muse*th).sum();
@@ -653,7 +654,7 @@ Type objective_function<Type>::operator() () {
     Type lps = 0.0;
     Type postProbNorm = 0.0;
     // Contribution from G
-    nll -= log(NormalizationConstant);
+    nll_est -= log(NormalizationConstant);
     // Contrbution from Y
     for(int j = 0; j < NLEVELS(G); ++j){ // Loop over groups
       vector<Type> tmp((vector<Type>)Y.col(i));
@@ -678,7 +679,8 @@ Type objective_function<Type>::operator() () {
     }
     for(int j = 0; j < NLEVELS(G); ++j)
       posterior_logprobability(j,i) -= postProbNorm;
-    nll -= lps;
+    nll_est -= lps;
+    nll += nll_est;
   }
 
   ////////////////////////////////////////////////////////////////////////////

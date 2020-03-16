@@ -10,7 +10,7 @@
 
 template<class Type>
 bool isNA(Type x){
-  return R_IsNA(asDouble(x));
+  return R_IsNA(asDouble(x));// || asDouble(x) == NA_INTEGER;
 }
 
 
@@ -412,7 +412,14 @@ Type objective_function<Type>::operator() () {
   matrix<Type> posterior_logprobability(NLEVELS(G), Y.cols());
   
   for(int i = 0; i < Y.cols(); ++i){ // Loop over individuals
-    vector<Type> th = thetaDisp.col(dispersionGroup(i)).col(proportionGroup(i));
+    //vector<Type> th = thetaDisp.col(dispersionGroup(i)).col(proportionGroup(i));
+    vector<Type> th;
+    if(isNA(dispersionGroup(i))){
+      th = theta.col(proportionGroup(i));
+    }else{
+      th = thetaDisp.col(dispersionGroup(i)).col(proportionGroup(i));
+    }
+
     vector<Type> Muse = Mvec(confusionGroup(i)).row(G(i));
     Type NormalizationConstant = (Muse*th).sum();
     vector<Type> lp(NLEVELS(G));
@@ -498,11 +505,11 @@ Type objective_function<Type>::operator() () {
   
   for(int i = 0; i < Y_pred.cols(); ++i){ // Loop over individuals
     vector<Type> th;
-    // if(isNA(dispersionGroup_pred(i))){
-    //   th = theta.col(proportionGroup_pred(i));
-    // }else{
+    if(isNA(dispersionGroup_pred(i))){
+      th = theta.col(proportionGroup_pred(i));
+    }else{
       th = thetaDisp.col(dispersionGroup_pred(i)).col(proportionGroup_pred(i));
-    // }
+    }
     Type postProbNorm = 0.0;
 
     for(int j = 0; j < NLEVELS(G); ++j){ // Loop over groups

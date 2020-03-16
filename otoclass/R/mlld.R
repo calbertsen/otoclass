@@ -151,8 +151,8 @@ mlld <- function(## Data related
         Guse[indx] <- levels(group)[1]
     }
 
-    if(any(is.na(dispersionGroup)))
-        stop("dispersionGroup can not have NA")
+    ## if(any(is.na(dispersionGroup)))
+    ##     stop("dispersionGroup can not have NA")
     
     if(!is.factor(dispersionGroup))
         dispersionGroup <- factor(dispersionGroup)

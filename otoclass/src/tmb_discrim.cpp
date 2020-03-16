@@ -1,6 +1,5 @@
 #define EIGEN_PERMANENTLY_DISABLE_STUPID_WARNINGS
 
-
 #include "../inst/include/efd.hpp"
 
 #define install Rf_install
@@ -9,7 +8,10 @@
 #include <TMB.hpp>
 
 
-
+template<class Type>
+bool isNA(Type x){
+  return R_IsNA(asDouble(x));
+}
 
 
 namespace my_atomic {
@@ -258,14 +260,17 @@ Type objective_function<Type>::operator() () {
   DATA_SPARSE_MATRIX(XCom);
   DATA_FACTOR(proportionGroup);
   DATA_FACTOR(confusionGroup);
-
+  DATA_FACTOR(dispersionGroup);
+  
   DATA_INTEGER(penalty);
 
   DATA_ARRAY(Y_pred)
   DATA_SPARSE_MATRIX(X_pred);
   DATA_SPARSE_MATRIX(XCom_pred);
   DATA_FACTOR(proportionGroup_pred);
+  DATA_FACTOR(dispersionGroup_pred);
 
+  
   PARAMETER_ARRAY(mu);
   PARAMETER_MATRIX(commonMu);
   PARAMETER_MATRIX(logSigma);
@@ -279,6 +284,9 @@ Type objective_function<Type>::operator() () {
 
   PARAMETER_MATRIX(tmixpIn);
   PARAMETER_MATRIX(logDf);
+
+  PARAMETER(logSdDispersion);
+  PARAMETER_MATRIX(dispersion);
 
   ////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////// Check //////////////////////////////////
@@ -335,12 +343,24 @@ Type objective_function<Type>::operator() () {
 
   
   // Transform theta
+  array<Type> thetaDisp(thetaIn.rows() + 1,thetaIn.cols(), dispersion.cols());
+  for(int k = 0; k < dispersion.cols(); ++k){
+    for(int j = 0; j < theta.cols(); ++j){
+      for(int i = 0; i < thetaIn.rows(); ++i)
+	thetaDisp(i,j,k) = exp(thetaIn(i,j) + dispersion(i,k));
+      thetaDisp(thetaDisp.rows()-1,j,k) = 1.0;
+      thetaDisp.col(k).col(j) /= thetaDisp.col(k).col(j).sum();
+    }
+  }
+
   matrix<Type> theta(thetaIn.rows() + 1,thetaIn.cols());
-  for(int j = 0; j < theta.cols(); ++j){
-    for(int i = 0; i < thetaIn.rows(); ++i)
-      theta(i,j) = exp(thetaIn(i,j));
-    theta(theta.rows()-1,j) = 1.0;
-    theta.col(j) /= theta.col(j).sum();
+  for(int k = 0; k < dispersion.rows(); ++k){
+    for(int j = 0; j < theta.cols(); ++j){
+      for(int i = 0; i < thetaIn.rows(); ++i)
+	theta(i,j) = exp(thetaIn(i,j));
+      theta(theta.rows()-1,j) = 1.0;
+      theta.col(j) /= theta.col(j).sum();
+    }
   }
 
   // Transform confusion
@@ -371,10 +391,18 @@ Type objective_function<Type>::operator() () {
     dist(i) = MVMIX_t<Type>(SigmaList(i), (vector<Type>)tmixp.col(i), (vector<Type>)df.col(i));
     //    dist(i) = OTOLITH_t<Type>((vector<Type>)corpar.col(i), (vector<Type>)sigma.col(i), modelType);
 
+  Type sdDispersion = exp(logSdDispersion);
   
   // Likelihood value
   Type nll = 0.0;
 
+  // Dispersion random effect
+  if(CppAD::Variable(dispersion(0,0)))
+    for(int i = 0; i < dispersion.rows(); ++i){
+      for(int j = 0; j < dispersion.cols(); ++j){
+	nll -= dnorm(dispersion(i,j), Type(0.0), sdDispersion, true);      
+      }
+    }
   
   ////////////////////////////////////////////////////////////////////////////
   ///////////////////////////////// Estimate /////////////////////////////////
@@ -384,7 +412,7 @@ Type objective_function<Type>::operator() () {
   matrix<Type> posterior_logprobability(NLEVELS(G), Y.cols());
   
   for(int i = 0; i < Y.cols(); ++i){ // Loop over individuals
-    vector<Type> th = theta.col(proportionGroup(i));
+    vector<Type> th = thetaDisp.col(dispersionGroup(i)).col(proportionGroup(i));
     vector<Type> Muse = Mvec(confusionGroup(i)).row(G(i));
     Type NormalizationConstant = (Muse*th).sum();
     vector<Type> lp(NLEVELS(G));
@@ -469,7 +497,12 @@ Type objective_function<Type>::operator() () {
   matrix<Type> pred_posterior_logprobability(NLEVELS(G), Y_pred.cols());
   
   for(int i = 0; i < Y_pred.cols(); ++i){ // Loop over individuals
-    vector<Type> th = theta.col(proportionGroup_pred(i));
+    vector<Type> th;
+    // if(isNA(dispersionGroup_pred(i))){
+    //   th = theta.col(proportionGroup_pred(i));
+    // }else{
+      th = thetaDisp.col(dispersionGroup_pred(i)).col(proportionGroup_pred(i));
+    // }
     Type postProbNorm = 0.0;
 
     for(int j = 0; j < NLEVELS(G); ++j){ // Loop over groups
@@ -517,6 +550,10 @@ Type objective_function<Type>::operator() () {
   REPORT(theta);
   ADREPORT(theta);
 
+  REPORT(thetaDisp);
+  ADREPORT(thetaDisp);
+
+  
   REPORT(Mvec);
 
   REPORT(SigmaList);

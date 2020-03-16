@@ -20,6 +20,7 @@ mlld <- function(## Data related
                  formulaCommon = ~1,
                  proportionGroup = factor(rep("Baseline",nrow(y))),
                  confusionGroup = factor(ifelse(is.na(group),"Unknown","Known")), ##factor(rep("Known",nrow(y))),
+                 dispersionGroup = factor(rep(1,nrow(y))),
                  ## Penalty related
                  lp_penalty = 0,
                  lambda = 0.4,
@@ -149,6 +150,12 @@ mlld <- function(## Data related
             stop("All observations with NA in group must have a confusionGroup with confusionLevelType equal to 'Unknown'")
         Guse[indx] <- levels(group)[1]
     }
+
+    if(any(is.na(dispersionGroup)))
+        stop("dispersionGroup can not have NA")
+    
+    if(!is.factor(dispersionGroup))
+        dispersionGroup <- factor(dispersionGroup)
     
 ##### Data for TMB #####
     dat <- list(model = ifelse(independent,0L,1L),
@@ -158,11 +165,13 @@ mlld <- function(## Data related
                 XCom = XCom,
                 proportionGroup = proportionGroup,
                 confusionGroup = confusionGroup,
+                dispersionGroup = dispersionGroup,
                 penalty = lp_penalty,
                 Y_pred = array(0,dim=c(0,0)),
                 X_pred = as(matrix(0,0,0),"dgTMatrix"),
                 XCom_pred = as(matrix(0,0,0),"dgTMatrix"),
-                proportionGroup_pred = factor()
+                proportionGroup_pred = factor(),
+                dispersionGroup_pred = factor()
                 )
     
 ##### Parameters for TMB #####
@@ -191,7 +200,10 @@ mlld <- function(## Data related
                                      nlevels(proportionGroup)),
                     MIn = MIn,
                     tmixpIn = matrix(qlogis(tMixture+0.01*as.numeric(estimateTMix)), n, nlevels(dat$G)),
-                    logDf = matrix(log(tDf), n, nlevels(dat$G))
+                    logDf = matrix(log(tDf), n, nlevels(dat$G)),
+                    logSdDispersion = 0,
+                    dispersion = matrix(0.0,nlevels(dat$G)-1,
+                                        nlevels(dispersionGroup))
                     )
     }
     np <- Reduce("+",lapply(par,length))
@@ -220,6 +232,7 @@ mlld <- function(## Data related
     tDfMap <- tMap
     if(!estimateTDf)
         tDfMap[] <- NA
+
     
     
     map <- list(logSigma = sigmaMap,
@@ -229,6 +242,11 @@ mlld <- function(## Data related
                 tmixpIn = factor(tMixMap),
                 logDf = factor(tDfMap)
                 )
+
+    if(nlevels(dispersionGroup) == 1){
+        map$logSdDispersion = factor(NA)
+        map$dispersion = factor(rep(NA, length(par$dispersion)))        
+    }
 
     if(nrow(par$commonMu) > 0){
         cMuMap <- matrix(1:length(par$commonMu),nrow(par$commonMu),ncol(par$commonMu))
@@ -244,6 +262,10 @@ mlld <- function(## Data related
     }else{
         rnd <- c("mu","commonMu")
     }
+    if(nlevels(dispersionGroup) > 1){
+        rnd <- c(rnd,"dispersion")
+    }
+    
     npfix <- Reduce("+",lapply(map,function(x)sum(is.na(x))))
     if(np-npfix > nrow(y) / 10)
         warning(sprintf("The model has %s parameters with only %s observations - %.2f observations per parameter. There is a high risk of overfitting.",np-npfix,nrow(y),nrow(y)/(np-npfix))) 
@@ -253,17 +275,20 @@ mlld <- function(## Data related
                           DLL = "otoclass")
     if(onlyObj)
         return(obj)
+    low <- rep(-Inf, length(obj$par))
+    low[names(obj$par) %in% "logSdDispersion"] <- -10
     opt <- stats::nlminb(obj$par,
                          obj$fn,
                          obj$gr,
+                         lower = low,
                          control = control)
     opt$double_objective <- obj$env$f(obj$env$last.par.best, type="double")
     rp <- obj$report(obj$env$last.par.best)
 
-    muNames <- list(rownames(dat$covar),
+    muNames <- list(rownames(dat$X),
                     colnames(y),
                     levels(group))
-    commonMuNames <- list(rownames(dat$commonCovar),
+    commonMuNames <- list(rownames(dat$XCom),
                           colnames(y))
 
  

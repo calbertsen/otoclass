@@ -10,8 +10,12 @@
 
 template<class Type>
 bool isNA(Type x){
-  return R_IsNA(asDouble(x));// || asDouble(x) == NA_INTEGER;
+  return R_IsNA(asDouble(x)) || asDouble(x) == NA_INTEGER;
 }
+bool isNA(int x){
+  return x == NA_INTEGER;
+}
+
 
 
 namespace my_atomic {
@@ -343,16 +347,6 @@ Type objective_function<Type>::operator() () {
 
   
   // Transform theta
-  array<Type> thetaDisp(thetaIn.rows() + 1,thetaIn.cols(), dispersion.cols());
-  for(int k = 0; k < dispersion.cols(); ++k){
-    for(int j = 0; j < theta.cols(); ++j){
-      for(int i = 0; i < thetaIn.rows(); ++i)
-	thetaDisp(i,j,k) = exp(thetaIn(i,j) + dispersion(i,k));
-      thetaDisp(thetaDisp.rows()-1,j,k) = 1.0;
-      thetaDisp.col(k).col(j) /= thetaDisp.col(k).col(j).sum();
-    }
-  }
-
   matrix<Type> theta(thetaIn.rows() + 1,thetaIn.cols());
   for(int k = 0; k < dispersion.rows(); ++k){
     for(int j = 0; j < theta.cols(); ++j){
@@ -397,10 +391,10 @@ Type objective_function<Type>::operator() () {
   Type nll = 0.0;
 
   // Dispersion random effect
-  if(CppAD::Variable(dispersion(0,0)))
     for(int i = 0; i < dispersion.rows(); ++i){
       for(int j = 0; j < dispersion.cols(); ++j){
-	nll -= dnorm(dispersion(i,j), Type(0.0), sdDispersion, true);      
+	if(CppAD::Variable(dispersion(i,j)))
+	  nll -= dnorm(dispersion(i,j), Type(0.0), sdDispersion, true);      
       }
     }
   
@@ -409,17 +403,22 @@ Type objective_function<Type>::operator() () {
   ////////////////////////////////////////////////////////////////////////////
 
   array<Type> posterior_mean(Y.rows(), Y.cols(), NLEVELS(G));
+  matrix<Type> prior_logprobability(NLEVELS(G), Y.cols());
   matrix<Type> posterior_logprobability(NLEVELS(G), Y.cols());
   
   for(int i = 0; i < Y.cols(); ++i){ // Loop over individuals
     //vector<Type> th = thetaDisp.col(dispersionGroup(i)).col(proportionGroup(i));
-    vector<Type> th;
+    vector<Type> th(thetaIn.rows()+1);
+    th.setZero();
     if(isNA(dispersionGroup(i))){
       th = theta.col(proportionGroup(i));
     }else{
-      th = thetaDisp.col(dispersionGroup(i)).col(proportionGroup(i));
+      for(int qq = 0; qq < thetaIn.rows(); ++qq)
+	th(qq) = exp(thetaIn(qq,proportionGroup(i)) + dispersion(qq,dispersionGroup(i)));
+      th(th.size() - 1) = 1.0;
+      th /= th.sum();
     }
-
+    //prior_logprobability.col(i) = log(th);
     vector<Type> Muse = Mvec(confusionGroup(i)).row(G(i));
     Type NormalizationConstant = (Muse*th).sum();
     vector<Type> lp(NLEVELS(G));
@@ -501,17 +500,22 @@ Type objective_function<Type>::operator() () {
   ////////////////////////////////////////////////////////////////////////////
 
   array<Type> pred_posterior_mean(Y_pred.rows(), Y_pred.cols(), NLEVELS(G));
+  matrix<Type> pred_prior_logprobability(NLEVELS(G), Y_pred.cols());
   matrix<Type> pred_posterior_logprobability(NLEVELS(G), Y_pred.cols());
   
   for(int i = 0; i < Y_pred.cols(); ++i){ // Loop over individuals
-    vector<Type> th;
+    vector<Type> th(thetaIn.rows()+1);
+    th.setZero();;
     if(isNA(dispersionGroup_pred(i))){
       th = theta.col(proportionGroup_pred(i));
     }else{
-      th = thetaDisp.col(dispersionGroup_pred(i)).col(proportionGroup_pred(i));
+      for(int qq = 0; qq < thetaIn.rows(); ++qq)
+	th(qq) = exp(thetaIn(qq,proportionGroup_pred(i)) + dispersion(qq,dispersionGroup_pred(i)));
+      th(th.size() - 1) = 1.0;
+      th /= th.sum();
     }
     Type postProbNorm = 0.0;
-
+    pred_prior_logprobability .col(i) = th;
     for(int j = 0; j < NLEVELS(G); ++j){ // Loop over groups
       array<Type> tmp;
       tmp = Y_pred.col(i);
@@ -543,12 +547,14 @@ Type objective_function<Type>::operator() () {
 
   REPORT(posterior_mean);
   REPORT(posterior_logprobability);
+  REPORT(prior_logprobability);
 
   ADREPORT(posterior_mean);
   ADREPORT(posterior_logprobability);
 
   REPORT(pred_posterior_mean);
   REPORT(pred_posterior_logprobability);
+  REPORT(pred_prior_logprobability);
 
   ADREPORT(pred_posterior_mean);
   ADREPORT(pred_posterior_logprobability);
@@ -556,10 +562,6 @@ Type objective_function<Type>::operator() () {
 
   REPORT(theta);
   ADREPORT(theta);
-
-  REPORT(thetaDisp);
-  ADREPORT(thetaDisp);
-
   
   REPORT(Mvec);
 

@@ -27,6 +27,7 @@ extern "C" {
 #ifdef TMB_CALLDEFS
     TMB_CALLDEFS,
 #else
+    CALLDEF(FreeADFunObject, 1)
     CALLDEF(MakeADFunObject, 4),
     CALLDEF(InfoADFunObject, 1),
     CALLDEF(EvalADFunObject, 3),

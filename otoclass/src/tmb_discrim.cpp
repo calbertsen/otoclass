@@ -8,6 +8,44 @@
 #include <TMB.hpp>
 
 
+namespace my_atomic {
+
+  template<class T>
+  T logspace_add2_raw (const T &logx, const T &logy) {
+    // Was:
+    //  fmax2 (logx, logy) + log1p (exp (-fabs (logx - logy)));
+    if(logx == R_NegInf)
+      return(logy);
+    if(logy == R_NegInf)
+      return(logx);
+    return ( logx < logy ?
+             logy + log1p (exp (logx - logy)) :
+             logx + log1p (exp (logy - logx)) );
+  }
+
+  
+TMB_BIND_ATOMIC(logspace_add2,
+                11,
+                logspace_add2_raw(x[0], x[1]) )
+
+  
+}
+
+template<class Type>
+Type logspace_add2(Type logx, Type logy) {
+  if ( !CppAD::Variable(logx) && logx == Type(-INFINITY) )
+    return logy;
+  if ( !CppAD::Variable(logy) && logy == Type(-INFINITY) )
+    return logx;
+  CppAD::vector<Type> tx(3);
+  tx[0] = logx;
+  tx[1] = logy;
+  tx[2] = 0; // order
+  return my_atomic::logspace_add2(tx)[0];
+}
+
+
+
 template<class Type>
 bool isNA(Type x){
   return R_IsNA(asDouble(x)) || asDouble(x) == NA_INTEGER;
@@ -403,12 +441,15 @@ Type objective_function<Type>::operator() () {
   ////////////////////////////////////////////////////////////////////////////
 
   array<Type> posterior_mean(Y.rows(), Y.cols(), NLEVELS(G));
+  posterior_mean.setZero();
   matrix<Type> prior_logprobability(NLEVELS(G), Y.cols());
+  prior_logprobability.setZero();
   matrix<Type> posterior_logprobability(NLEVELS(G), Y.cols());
+  posterior_logprobability.setZero();
   
   for(int i = 0; i < Y.cols(); ++i){ // Loop over individuals
     //vector<Type> th = thetaDisp.col(dispersionGroup(i)).col(proportionGroup(i));
-    vector<Type> th(thetaIn.rows()+1);
+    vector<Type> th(NLEVELS(G));
     th.setZero();
     if(isNA(dispersionGroup(i))){
       th = theta.col(proportionGroup(i));
@@ -422,8 +463,8 @@ Type objective_function<Type>::operator() () {
     vector<Type> Muse = Mvec(confusionGroup(i)).row(G(i));
     Type NormalizationConstant = (Muse*th).sum();
     vector<Type> lp(NLEVELS(G));
-    Type lps = 0.0;
-    Type postProbNorm = 0.0;
+    Type lps = R_NegInf;
+    Type postProbNorm = R_NegInf;
     // Contribution from G
     nll -= log(NormalizationConstant);
 
@@ -440,13 +481,8 @@ Type objective_function<Type>::operator() () {
       Type ld = -dist(j)(tmp); // dist returns negative log-likelihood!
       lp(j) = ld + log(th(j)) + log(Muse(j)) - log(NormalizationConstant);
       posterior_logprobability(j,i) = ld + log(th(j));
-      if(j == 0){
-	lps = lp(j);
-	postProbNorm = posterior_logprobability(j,i);
-      }else{
-	lps = logspace_add(lps,lp(j));
-	postProbNorm = logspace_add(postProbNorm, posterior_logprobability(j,i));
-      }
+      lps = logspace_add2(lps,lp(j));
+      postProbNorm = logspace_add2(postProbNorm, posterior_logprobability(j,i));      
     }
     for(int j = 0; j < NLEVELS(G); ++j)
       posterior_logprobability(j,i) -= postProbNorm;
@@ -514,7 +550,7 @@ Type objective_function<Type>::operator() () {
       th(th.size() - 1) = 1.0;
       th /= th.sum();
     }
-    Type postProbNorm = 0.0;
+    Type postProbNorm = R_NegInf;
     pred_prior_logprobability .col(i) = th;
     for(int j = 0; j < NLEVELS(G); ++j){ // Loop over groups
       array<Type> tmp;
@@ -527,11 +563,7 @@ Type objective_function<Type>::operator() () {
       pred_posterior_mean.col(j).col(i) = tmpMean;
       Type ld =  dist(j)(tmp);
       pred_posterior_logprobability(j,i) = ld + log(th(j));
-      if(j == 0){
-	postProbNorm = pred_posterior_logprobability(j,i);
-      }else{
-	postProbNorm = logspace_add(postProbNorm, pred_posterior_logprobability(j,i));
-      }
+      postProbNorm = logspace_add2(postProbNorm, pred_posterior_logprobability(j,i));
     }
     for(int j = 0; j < NLEVELS(G); ++j)
       pred_posterior_logprobability(j,i) -= postProbNorm;

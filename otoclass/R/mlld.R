@@ -20,7 +20,7 @@ mlld <- function(## Data related
                  formulaCommon = ~1,
                  proportionGroup = factor(rep("Baseline",nrow(y))),
                  confusionGroup = factor(ifelse(is.na(group),"Unknown","Known")), ##factor(rep("Known",nrow(y))),
-                 dispersionGroup = factor(rep(1,nrow(y))),
+                 dispersionGroup = factor(rep(NA,nrow(y))),
                  ## Penalty related
                  lp_penalty = 0,
                  lambda = 0.4,
@@ -55,6 +55,12 @@ mlld <- function(## Data related
         }
     if(!is.factor(group))
         group <- factor(group)
+    if(!is.factor(proportionGroup))
+        proportionGroup <- factor(proportionGroup)
+    if(!is.factor(confusionGroup))
+        confusionGroup <- factor(confusionGroup)
+    if(!is.factor(dispersionGroup))
+        dispersionGroup <- factor(dispersionGroup)
     if(!(length(lambda) == 2 || length(lambda)==1) | any(lambda <= 0))
         stop("Lambda must be a positive scalar.")
     ## if((!identical(formula, ~1) | !identical(formulaCommon, ~1)) & is.null(data))
@@ -240,10 +246,10 @@ mlld <- function(## Data related
                 logLambda = factor(rep(1:length(lambda),length.out = length(par$logLambda))),
                 MIn = factor(CMA_map),
                 tmixpIn = factor(tMixMap),
-                logDf = factor(tDfMap)
+                logDf = factor(tDfMap),
                 )
 
-    if(nlevels(dispersionGroup) == 1){
+    if(nlevels(dispersionGroup) == 0){
         map$logSdDispersion = factor(NA)
         map$dispersion = factor(rep(NA, length(par$dispersion)))        
     }

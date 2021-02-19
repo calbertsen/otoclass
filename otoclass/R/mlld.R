@@ -142,7 +142,7 @@ mlld <- function(## Data related
         if(dim(MIn)[1] == 1){
             MIn[,,i] <- 1
         }else{
-            MIn[,,i] <- expm::logm(MIn[,,i])
+            MIn[,,i] <- expm::logm(MIn[,,i] + diag(1e-10, dim(MIn)[1]))
             diag(MIn[,,i]) <- 1
         }
         MIn[,,i] <- log(MIn[,,i])
@@ -246,7 +246,7 @@ mlld <- function(## Data related
                 logLambda = factor(rep(1:length(lambda),length.out = length(par$logLambda))),
                 MIn = factor(CMA_map),
                 tmixpIn = factor(tMixMap),
-                logDf = factor(tDfMap),
+                logDf = factor(tDfMap)
                 )
 
     if(nlevels(dispersionGroup) == 0){

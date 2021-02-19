@@ -4,8 +4,14 @@
 \alias{assign_unknown}
 \title{Assign unknown contours by binomial regression on elliptic fourier descriptors}
 \usage{
-assign_unknown(nimList, N = 60, delta = 0.01, lambda = 1,
-  link = "probit", normalize_efd = FALSE)
+assign_unknown(
+  nimList,
+  N = 60,
+  delta = 0.01,
+  lambda = 1,
+  link = "probit",
+  normalize_efd = FALSE
+)
 }
 \arguments{
 \item{nimList}{A list of normalized contours}

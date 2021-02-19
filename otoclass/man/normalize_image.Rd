@@ -4,8 +4,13 @@
 \alias{normalize_image}
 \title{Normalize an Otolith Image}
 \usage{
-normalize_image(dat, n, datCompare = NULL, forceFlip = FALSE,
-  flipByPosition = c("No", "Left", "Right"))
+normalize_image(
+  dat,
+  n,
+  datCompare = NULL,
+  forceFlip = FALSE,
+  flipByPosition = c("No", "Left", "Right")
+)
 }
 \arguments{
 \item{dat}{otolith_image object}

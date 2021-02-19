@@ -10,8 +10,7 @@
 \usage{
 efd(x, N, ...)
 
-\method{efd}{matrix}(x, N, returnAsList = FALSE, normalize = FALSE,
-  ...)
+\method{efd}{matrix}(x, N, returnAsList = FALSE, normalize = FALSE, ...)
 
 \method{efd}{otolith_contour}(x, N, ...)
 

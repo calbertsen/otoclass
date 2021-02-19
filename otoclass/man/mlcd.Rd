@@ -4,11 +4,20 @@
 \alias{mlcd}
 \title{Maximum Likelihood Contour Discrimination}
 \usage{
-mlcd(train, group, test, prior = as.vector(table(group))/length(group),
-  penalty = 0, lambda = 0.4, Nefd = 60,
-  correlatedCoordinates = FALSE, equalVariance = TRUE,
-  silent = FALSE, control = list(iter.max = 1e+05, eval.max = 1e+05),
-  ...)
+mlcd(
+  train,
+  group,
+  test,
+  prior = as.vector(table(group))/length(group),
+  penalty = 0,
+  lambda = 0.4,
+  Nefd = 60,
+  correlatedCoordinates = FALSE,
+  equalVariance = TRUE,
+  silent = FALSE,
+  control = list(iter.max = 1e+05, eval.max = 1e+05),
+  ...
+)
 }
 \arguments{
 \item{train}{3D Array of training data (2 x number of contour points x number of observations)}

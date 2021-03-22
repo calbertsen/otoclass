@@ -19,6 +19,12 @@
 
 extern "C" {
 
+
+  SEXP bcsplineR(SEXP x, SEXP knots, SEXP pars);
+  SEXP ibcsplineR(SEXP x, SEXP knots, SEXP pars);
+  SEXP ibcdsplineR(SEXP x, SEXP knots, SEXP pars);
+  SEXP ibcisplineR(SEXP x, SEXP knots, SEXP pars);
+  
 #include <R_ext/Rdynload.h>
 #define CALLDEF(name,n) {#name, (DL_FUNC) &name, n}
  
@@ -50,6 +56,10 @@ extern "C" {
     CALLDEF(efd2coordSEXP,4),
     CALLDEF(efd,3),
     CALLDEF(scanlineFill,5),
+    CALLDEF(bcsplineR,3),
+    CALLDEF(ibcsplineR,3),
+    CALLDEF(ibcdsplineR,3),
+    CALLDEF(ibcisplineR,3),
     {NULL,NULL,0}
   };
 

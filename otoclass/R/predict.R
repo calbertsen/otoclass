@@ -1,13 +1,18 @@
 
 
 ##' @export
-predict.mlld <- function(x, y = NULL, data = NULL,proportionGroup = NULL, prior = NULL, se.fit = FALSE, ...){
+predict.mlld <- function(x, y = NULL, data = NULL, group = NULL, proportionGroup = NULL, prior = NULL, se.fit = FALSE, ...){
     if(is.null(y)){ ## Use fitted data
         if(!is.null(data))
             message("data is ignored when y is not given.")
         rp <- x$rp
+        if(match("posterior_logprobability_shape",names(rp),FALSE)){
+            pname <- ifelse(is.null(group), "posterior_logprobability_shape", "posterior_logprobability_all")
+        }else{
+            pname <- "posterior_logprobability"
+        }
         rn<- rownames(x$y)
-        posterior <- t(exp(rp$posterior_logprobability))
+        posterior <- t(exp(rp[[pname]]))
         fit <- aperm(rp$posterior_mean,c(2,1,3))
  
         if(se.fit){
@@ -59,13 +64,37 @@ predict.mlld <- function(x, y = NULL, data = NULL,proportionGroup = NULL, prior 
         attr(pgp,"levels") <- levels(x$proportionGroup)
         dat$proportionGroup_pred <- pgp
 
+        if(is.null(group)){
+            dat$G_pred <- matrix(NA_integer_, ncol(dat$Y_pred), 0)
+        }else{
+            if(!is.factor(group) && !is.data.frame(group)){
+                group <- factor(group)
+            }
+            if(is.data.frame(group)){
+                gisf <- sapply(group, is.factor)
+                if(any(!gisf)){
+                    for(i in which(gisf))
+                        group[[i]] <- factor(group[[i]])
+                }
+            }else{
+                group <- data.frame(G = group)
+            }
+
+            groupLevels <- lapply(group, levels)
+            groupNlevels <- sapply(group, nlevels)
+            group <- do.call("cbind",lapply(group, function(x) as.integer(x) - 1))
+            dat$G_pred <- group
+            if(all(is.na(group)) || !isTRUE(all.equal(groupLevels, x$groupLevels)))
+                warning("group does not match the fitted group.")
+        }
+        return(dat)
         obj <- TMB::MakeADFun(dat,x$pl,x$tmb_map,
                               silent = x$silent, random = x$tmb_random,
                               DLL = "otoclass")
         rp <- obj$report(obj$env$last.par)
         rn <- names(y)
 
-        posterior <- t(exp(rp$pred_posterior_logprobability))
+        posterior <- t(exp(rp[[pname]]))
         fit <- aperm(rp$pred_posterior_mean,c(2,1,3))
 
         if(se.fit){
@@ -81,7 +110,7 @@ predict.mlld <- function(x, y = NULL, data = NULL,proportionGroup = NULL, prior 
 
     colnames(posterior) <- x$muNames[[3]]
     rownames(posterior) <- rn
-    clas <- colnames(posterior)[apply(posterior,1,which.max)]
+    clas <- factor(colnames(posterior)[apply(posterior,1,which.max)], levels = x$muNames[[3]])
     dimnames(fit) <- list(rn,x$muNames[[2]],x$muNames[[3]])
     res <- list(class=clas,
                 posterior = posterior,

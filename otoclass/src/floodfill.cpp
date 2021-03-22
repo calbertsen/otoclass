@@ -14,7 +14,7 @@ struct Image {
   int h;
   int w;
 
-  Image(double *rPic_, double dtol_, int h_, int w_): dtol(dtol_), h(h_), w(w_), dInitCol(0.0) {
+  Image(double *rPic_, double dtol_, int h_, int w_): dtol(dtol_), dInitCol(0.0), h(h_), w(w_) {
     rPic = rPic_;
   };
 

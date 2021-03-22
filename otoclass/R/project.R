@@ -1,4 +1,11 @@
 
+getGroupDataFrame <- function(x, ...){
+    UseMethod("getGroupDataFrame")
+}
+getGroupDataFrame.mlld <- function(x,...){    
+    as.data.frame(lapply(seq_along(x$groupLevels), function(i) factor(x$groupLevels[[i]][x$group+1],x$groupLevels[[i]])))
+}
+
 calculateVarBetweenGroups <- function(x, ...){
     UseMethod("calculateVarBetweenGroups")
 }
@@ -7,14 +14,14 @@ calculateVarBetweenGroups <- function(x, ...){
 calculateVarBetweenGroups.mlld <- function(x, ...){
     if(!is.na(x$varBetweenGroups))
         return(x$varBetweenGroups)
-    X <- model.matrix(x$terms,data = x$data)
-    beta <- x$rp$muUse
-    group <- x$group
-    muList <- sapply(1:nrow(X), function(i){
-        X[i,] %*% beta[,,group[i]]
-    }, simplify = FALSE)
+    grp <- getGroupDataFrame(x)
+    pr <- predict(x, group = grp)
+    muList <- lapply(seq_along(pr$class), function(i) {
+        pr$fit[i,,pr$class[i], drop = TRUE]
+    })
     muAll <- colMeans(x$y)
-    Sigma <- Reduce("+",lapply(muList, function(xx) t(xx-muAll) %*% (xx-muAll))) / (nrow(X)-1)
+    N <- nrow(pr$fit)
+    Sigma <- Reduce("+",lapply(muList, function(xx) t(xx-muAll) %*% (xx-muAll))) / (N-1)
     return(Sigma)    
 }
 
@@ -27,17 +34,16 @@ calculateVarWithinGroups <- function(x, ...){
 calculateVarWithinGroups.mlld <- function(x, ...){
     if(!is.na(x$varWithinGroups))
         return(x$varWithinGroups)
-    Sigma <- Reduce("+",vcov(x)) / nlevels(x$group)
+    vcx <- vcov(x)
+    Sigma <- Reduce("+",vcx) / length(vcx)
     return(Sigma)
 }
 
 
 
 
-##' .. content for \description{} (no empty lines) ..
+##' LDA-like projection
 ##'
-##' .. content for \details{} ..
-##' @title 
 ##' @param x 
 ##' @param ... 
 ##' @return 
@@ -48,22 +54,21 @@ projection <- function(x, ...){
 }
 
 ##' @export
-projection.mlld <- function(x, y, group, ...){
-    if(missing(y) & missing(group)){
+projection.mlld <- function(x, y, ...){
+    if(missing(y) & missing(group))
         y <- x$y
-        group <- x$group
-    }else if(!(missing(y) & missing(group))){
-        stop("Both y and group must be given.")
-    }
-    if(ncol(y) != ncol(x$y)){
-        stop("The new y does not match the fitted object.")
-    }
-    if(!isTRUE(all.equal(levels(group), levels(x$group)))){
-        stop("The new group does not match the fitted object.")
-    }
-    if(nrow(y) != length(group))
-        stop("y and group does not match.")
-    
+        ## group <- x$group
+    ## }else if(!(missing(y) & missing(group))){
+    ##     stop("Both y and group must be given.")
+    ## }
+    ## if(ncol(y) != ncol(x$y)){
+    ##     stop("The new y does not match the fitted object.")
+    ## }
+    ## if(!isTRUE(all.equal(levels(group), levels(x$group)))){
+    ##     stop("The new group does not match the fitted object.")
+    ## }
+    ## if(nrow(y) != length(group))
+    ##     stop("y and group does not match.")
     ee <- eigen(solve(x$varWithinGroups) %*% x$varBetweenGroups,symmetric = FALSE)
     noImPart <- sapply(ee$values, function(x) isTRUE(all.equal(Im(x),0)))
     nonZeroRe <- !sapply(ee$values / sum(ee$values),function(x)isTRUE(all.equal(Re(x),0)))
@@ -77,7 +82,7 @@ projection.mlld <- function(x, y, group, ...){
     colnames(projdat) <- paste0("CD",1:ncol(projdat))
     rownames(projdat) <- rownames(y)
     attr(projdat,"relative_importance") <- Re(ee$values[eeUse]) / sum(Re(ee$values[eeUse]))
-    attr(projdat,"group") <- group
+    ## attr(projdat,"group") <- group
     attr(projdat,"directions") <- evec
     class(projdat) <- "projection"
     return(projdat)

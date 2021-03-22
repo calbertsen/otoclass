@@ -1,7 +1,5 @@
-##' .. content for \description{} (no empty lines) ..
+##' Maximum likelihood linear discrimination
 ##'
-##' .. content for \details{} ..
-##' @title 
 ##' @param proportionGroup 
 ##' @param confusionGroup 
 ##' @param ... 
@@ -11,6 +9,7 @@
 ##' @importFrom methods as
 ##' @importFrom TMB MakeADFun sdreport
 ##' @importFrom expm logm
+##' @importFrom lme4 findbars nobars lFormula
 ##' @export
 mlld <- function(## Data related
                  y,
@@ -18,11 +17,14 @@ mlld <- function(## Data related
                  data = NULL,
                  formula = ~1,
                  formulaCommon = ~1,
-                 proportionGroup = factor(rep("Baseline",nrow(y))),
-                 confusionGroup = factor(ifelse(is.na(group),"Unknown","Known")), ##factor(rep("Known",nrow(y))),
-                 dispersionGroup = factor(rep(NA,nrow(y))),
+                 formulaProportion = ~1,
+                 formulaLogScale = ~ -1,
+                 ##formulaDispersion = ~ -1,
+                 ##proportionGroup = factor(rep("Baseline",nrow(y))),
+                 ##confusionGroup = NULL,
+                 ## dispersionGroup = factor(rep(NA,nrow(y))),
                  ## Penalty related
-                 lp_penalty = 0,
+                 lp_penalty = NA,       # -1: Student's t penalty, 0: REML, 1: Lasso / Laplace prior, 2: Ridge / Gaussian prior, p: Lp penalty
                  lambda = 0.4,
                  estimateLambda = TRUE,
                  ## TMixture related
@@ -38,84 +40,153 @@ mlld <- function(## Data related
                  control = list(iter.max = 100000, eval.max = 100000),
                  drop.unused.levels = TRUE,
                  onlyObj = FALSE,
-                 doSdreport = FALSE,
+                 doSdreport = TRUE,
                  getReportCovariance = FALSE,
                  equalVariance = TRUE,
-                 confusionMatrixArray = NULL,
-                 confusionLevelTypes = levels(confusionGroup),  ## Possible values: c("Known","Fixed","Estimate","Unknown")               
+                 confusionMatrixList = NULL,
+                 groupConversionList = list(),
+                 confusionLevelTypes = rep("Known",ifelse(is.null(ncol(group)),1,ncol(group))),  ## Possible values: c("Known","Fixed","Estimate")
+                 observationType = c("MVMIX","SNP1","SNP2","SPL_AR1","FS1_AR1"),
+                 forceMeanIncrease = FALSE,
+                 ## na.pass = FALSE,
+                 fixZeroGradient = TRUE,
+                 SNP2dm = TRUE,
+                 SPLknots = plogis(seq(qlogis(1/(ncol(y)+1)),qlogis(ncol(y)/(ncol(y)+1)),len=7)),
+                 Nefd = 5,
+                 lower = list(UlogSd = -10,
+                              UThetalogSd = -10,
+                              UComlogSd = -10,
+                              betaTheta = -10),
+                 upper = list(betaTheta = 10),
                  ...){
     
     cl <- match.call()
+    observationType <- match.argInt(observationType) - 1
+
 ##### Checks #####
-    if(!is.matrix(y))
-        if(is.vector(y)){
-            y <- matrix(y,ncol = 1)
-        }else{
-            stop("y must be a matrix of observations")
-        }
-    if(!is.factor(group))
+    if(observationType != 2){
+        if(!is.matrix(y))
+            if(is.vector(y)){
+                y <- matrix(y,ncol = 1)
+            }else{
+                stop("y must be a matrix of observations")
+            }
+        yUse <- t(y)
+    }else{
+        if(!is.array(y))
+            stop("y must be an array of allele observations with dimension #alleles x #loci x #individuals")
+        yUse <- y
+    }
+    nObs <- ifelse(observationType==2, dim(yUse)[3L], ncol(yUse))
+    ##nFeat <- ifelse(observationType==2, dim(yUse)[2L], nrow(yUse))
+    nFeat <- switch(as.character(observationType),
+                    "2" = dim(yUse)[2L],
+                    "3" = length(SPLknots)+1,
+                    "4" = Nefd * 2 + 1,
+                    nrow(yUse))
+
+    SNP2dm <- rep(SNP2dm,length.out = nFeat)
+                       
+    if(!is.factor(group) && !is.data.frame(group)){
         group <- factor(group)
-    if(!is.factor(proportionGroup))
-        proportionGroup <- factor(proportionGroup)
-    if(!is.factor(confusionGroup))
-        confusionGroup <- factor(confusionGroup)
-    if(!is.factor(dispersionGroup))
-        dispersionGroup <- factor(dispersionGroup)
+    }
+
+    if(is.data.frame(group)){
+        gisf <- sapply(group, is.factor)
+        if(any(!gisf)){
+            for(i in which(gisf))
+                group[[i]] <- factor(group[[i]])
+        }
+    }else{
+        group <- data.frame(G = group)
+    }
+
+    groupLevels <- lapply(group, levels)
+    groupNlevels <- sapply(group, nlevels)
+    group <- do.call("cbind",lapply(group, function(x) as.integer(x) - 1))
+    Ngroups <- unname(groupNlevels[1])
+    
+    if(length(groupConversionList) == 0){
+        if(any(groupNlevels != Ngroups))
+            stop("groupConversionList must be given when different number of groups are used")
+        groupConversionList <- lapply(seq_along(groupNlevels), function(i) diag(1,Ngroups))
+    }else if(length(groupConversionList) != ncol(group) - 1){
+            stop("Length of groupConversionList must be one less than the number of columns of group.")
+    }else{
+        groupConversionList <- c(list(diag(1,Ngroups)), groupConversionList)
+        if(!(all(sapply(groupConversionList,nrow) == groupNlevels) &&
+             all(sapply(groupConversionList,ncol) == Ngroups))){
+            stop("group conversion matrices have wrong dimensions.")
+        }
+    }
+    
+    ## if(!is.factor(proportionGroup))
+    ##     proportionGroup <- factor(proportionGroup)
+    ## if(!is.factor(confusionGroup))
+    ##     confusionGroup <- factor(confusionGroup)
+    ## if(!is.factor(dispersionGroup))
+    ##     dispersionGroup <- factor(dispersionGroup)
     if(!(length(lambda) == 2 || length(lambda)==1) | any(lambda <= 0))
         stop("Lambda must be a positive scalar.")
     ## if((!identical(formula, ~1) | !identical(formulaCommon, ~1)) & is.null(data))
     ##     stop("When a formula is specified, data must be given.")
-    if(!is.null(data) & !identical(nrow(y), nrow(data)))
+    if(!is.null(data) & !identical(nObs, nrow(data)))
         stop("data and y must have the same number of rows.")
 
-    confusionLevelTypes <- c("Known","Fixed","Estimate","Unknown")[pmatch(confusionLevelTypes,c("Known","Fixed","Estimate","Unknown"), duplicates.ok = TRUE)]
+    confusionLevelTypes <- c("Known","Fixed","Estimate")[pmatch(confusionLevelTypes,c("Known","Fixed","Estimate"), duplicates.ok = TRUE)]
     if(any(is.na(confusionLevelTypes)))
-        stop('confusionLevelTypes must be a vector of "Known","Fixed","Estimate","Unknown". Partial matches are allowed.')
-    if((length(confusionLevelTypes) != nlevels(confusionGroup)))
-        stop("The length of confusionLevelTypes must match the number of levels in confusionGroup or the number of fixed levels.")
-    if(!is.null(confusionMatrixArray) && !((dim(confusionMatrixArray)[3] == sum(confusionLevelTypes=="Fixed")) || (dim(confusionMatrixArray)[3] == length(confusionLevelTypes))))
+        stop('confusionLevelTypes must be a vector of "Known","Fixed","Estimate". Partial matches are allowed.')
+    if((length(confusionLevelTypes) != ncol(group)))
+        stop("The length of confusionLevelTypes must match the number of columns of group.")
+    if(!is.null(confusionMatrixList) && !((length(confusionMatrixList) == sum(confusionLevelTypes=="Fixed")) || (length(confusionMatrixList) == length(confusionLevelTypes))))
         stop("...")
 
 ##### Prepare confusion matrix array #####
-    hasAll <- !is.null(confusionMatrixArray) && (dim(confusionMatrixArray)[3] == length(confusionLevelTypes))
-    CMA <- array(NA,
-                 dim = c(nlevels(group), nlevels(group), nlevels(confusionGroup)))
+    hasAll <- !is.null(confusionMatrixList) && (length(confusionMatrixList) == length(confusionLevelTypes))
+    CMA <- lapply(groupNlevels, function(ii) diag(1,ii))
+    
     if(hasAll){
-        CMA <- confusionMatrixArray
+        CMA <- confusionMatrixList
     }else{
-        for(i in 1:nlevels(confusionGroup)){
-            if(confusionLevelTypes[i] == "Known"){
-                CMA[,,i] <- diag(1,nrow = dim(CMA)[1])
-            }else if(confusionLevelTypes[i] == "Fixed"){
+        for(i in seq_along(confusionLevelTypes)){
+            if(confusionLevelTypes[i] == "Fixed"){
                 isFixed <- confusionLevelTypes[1:i]=="Fixed"
-                CMA[,,i] <- confusionMatrixArray[,,sum(isFixed)]
+                CMA[[i]] <- confusionMatrixList[[sum(isFixed)]]
             }else if(confusionLevelTypes[i] == "Estimate"){
-                tmpMat <- matrix(0.1/dim(CMA)[1],nrow = dim(CMA)[1], ncol = dim(CMA)[2])
-                diag(tmpMat) <- 0.9
-                CMA[,,i] <- tmpMat
-            }else if(confusionLevelTypes[i] == "Unknown"){
-                CMA[,,i] <- 1/dim(CMA)[1]
+                CMA[[i]][] <- 0.1/nrow(CMA[[i]])
+                diag(CMA[[i]]) <- 0.9
             }
         }
     }
 
-    CMA_map <- array(1:prod(dim(CMA)), dim = dim(CMA))
-    for(i in 1:dim(CMA_map)[3]){
+    CMA_mapL <- relist(seq_along(unlist(CMA)), CMA)
+    for(i in seq_along(CMA_mapL)){
         if(confusionLevelTypes[i] %in% c("Estimate")){
-            diag(CMA_map[,,i]) <- NA
+            diag(CMA_mapL[[i]]) <- NA
         }else{
-            CMA_map[,,i] <- NA
+            CMA_mapL[[i]][] <- NA
         }
     }
+    CMA_map <- factor(unlist(CMA_mapL))
     
   
 ##### Prepare model matrix #####
+    lc <- lme4::lmerControl(check.nobs.vs.rankZ = "ignore",
+                            check.nobs.vs.nlev = "ignore",
+                            check.nlev.gtreq.5 = "ignore",
+                            check.nlev.gtr.1 = "ignore",
+                            check.nobs.vs.nRE= "ignore",
+                            check.rankX = "ignore",
+         check.scaleX = "ignore",
+         check.formula.LHS = "ignore")
+    
     if(is.null(data) & identical(formula,~1) & identical(formulaCommon, ~1))
-        data <- data.frame(ID = 1:nrow(y))
+        data <- data.frame(ID = 1:nObs)
     if(!is.null(data) & !is.data.frame(data))
         data <- as.data.frame(data)
 
-    mf <- model.frame(formula, data)
+    mf <- model.frame(lme4::nobars(formula), data,
+                              na.action = na.pass)
 
     X <- Matrix::sparse.model.matrix(terms(mf),
                                      data = mf,
@@ -123,11 +194,47 @@ mlld <- function(## Data related
                                      row.names = FALSE,
                                      drop.unused.levels = drop.unused.levels)
     if(inherits(X,"dgCMatrix"))
-        X <- as(X,"dgTMatrix")
+        X <- as(X,"dgTMatrix")    
+
+    if(is.null(lme4::findbars(formula))){
+        Z <- list()
+        U <- array(0,dim = c(0))
+        attr(U,"rdim") <- integer(0)
+        attr(U,"cdim") <- integer(0)
+        attr(U,"adim") <- integer(0)
+        Ucor <- array(0, dim = c(0))
+        attr(Ucor,"rdim") <- integer(0)
+        attr(Ucor,"cdim") <- integer(0)
+        UlogSd <- array(0, dim = c(0))
+        attr(UlogSd,"rdim") <- integer(0)
+        attr(UlogSd,"cdim") <- integer(0)        
+    }else{
+        rtZ <- lme4::lFormula(formula,data, na.action = na.pass, control = lc)$reTrms
+        Z <- lapply(rtZ$Ztlist,function(xx){
+            as(xx,"dgTMatrix")
+        })       
+        Znms <- rtZ$cnms
+        Zrdim <- sapply(rtZ$cnms,length)
+        Zcdim <- sapply(rtZ$flist,nlevels)
+        U <- array(numeric(sum(Zrdim * Zcdim * nFeat * Ngroups)))
+        attr(U,"rdim") <- as.integer(Zrdim * Zcdim)
+        attr(U,"cdim") <- as.integer(rep(nFeat, length(Z)))
+        attr(U,"adim") <- as.integer(rep(Ngroups, length(Z)))        
+        n <- Zrdim * (Zrdim - 1) / 2
+        Ucor <- array(0, dim = sum(n * nFeat * Ngroups))
+        attr(Ucor,"rdim") <- as.integer(n)
+        attr(Ucor,"cdim") <- as.integer(rep(nFeat, length(Z)))
+        attr(Ucor,"adim") <- as.integer(rep(Ngroups, length(Z)))
+        UlogSd <- array(2, dim = sum(Zrdim * nFeat * Ngroups))
+        attr(UlogSd,"rdim") <- as.integer(Zrdim)
+        attr(UlogSd,"cdim") <- as.integer(rep(nFeat, length(Z)))
+        attr(UlogSd,"adim") <- as.integer(rep(Ngroups, length(Z)))
+    }
 
 ##### Prepare common model matrix #####
     formulaCommon <- update.formula(formulaCommon, ~ . +1)
-    mfCommon <- model.frame(formulaCommon, data)
+    mfCommon <- model.frame(lme4::nobars(formulaCommon), data,
+                              na.action = na.pass)
     XCom <- Matrix::sparse.model.matrix(terms(mfCommon),
                                         data = mfCommon,
                                         transpose = TRUE,
@@ -136,83 +243,253 @@ mlld <- function(## Data related
     if(inherits(XCom,"dgCMatrix"))
         XCom <- as(XCom,"dgTMatrix")
 
-##### Prepare confusion matrices #####
-    MIn <- CMA
-    for(i in 1:dim(MIn)[3]){
-        if(dim(MIn)[1] == 1){
-            MIn[,,i] <- 1
-        }else{
-            MIn[,,i] <- expm::logm(MIn[,,i] + diag(1e-10, dim(MIn)[1]))
-            diag(MIn[,,i]) <- 1
-        }
-        MIn[,,i] <- log(MIn[,,i])
+    if(is.null(lme4::findbars(formulaCommon))){
+        ZCom <- list()
+        UC <- array(0,dim = c(0))
+        attr(UC,"rdim") <- integer(0)
+        attr(UC,"cdim") <- integer(0)
+        UCcor <- array(0, dim = c(0))
+        attr(UCcor,"rdim") <- integer(0)
+        attr(UCcor,"cdim") <- integer(0)
+        UClogSd <- array(0, dim = c(0))
+        attr(UClogSd,"rdim") <- integer(0)
+        attr(UClogSd,"cdim") <- integer(0)
+   }else{
+        rtZC <- lme4::lFormula(formulaCommon,data, na.action = na.pass, control = lc)$reTrms
+        ZCom <- lapply(rtZC$Ztlist,function(xx){
+            as(xx,"dgTMatrix")
+        })
+        ZCnms <- rtZC$cnms
+        ZCrdim <- sapply(rtZC$cnms,length)
+        ZCcdim <- sapply(rtZC$flist,nlevels)
+        UC <- array(numeric(sum(ZCrdim * ZCcdim * nFeat)))
+        attr(UC,"rdim") <- as.integer(ZCrdim * ZCcdim)
+        attr(UC,"cdim") <- as.integer(rep(nFeat, length(ZCom)))
+        n <- ZCrdim * (ZCrdim - 1) / 2
+        UCcor <- array(0, dim = sum(n*nFeat))
+        attr(UCcor,"rdim") <- as.integer(n)
+        attr(UCcor,"cdim") <- as.integer(rep(nFeat,length(ZCom)))
+        UClogSd <- array(2, dim = sum(ZCrdim*nFeat))
+        attr(UClogSd,"rdim") <- as.integer(ZCrdim)
+        attr(UClogSd,"cdim") <- as.integer(rep(nFeat,length(ZCom)))
     }
 
-##### Handle NA in group #####
-    Guse <- group
-    if(any(is.na(Guse))){
-        indx <- which(is.na(Guse))
-        if(any(confusionLevelTypes[confusionGroup[indx]] != "Unknown"))
-            stop("All observations with NA in group must have a confusionGroup with confusionLevelType equal to 'Unknown'")
-        Guse[indx] <- levels(group)[1]
+    
+##### Prepare proportion model matrix #####
+    formulaLogScale <- update.formula(formulaLogScale, ~ . +1)
+    mfLogScale <- model.frame(lme4::nobars(formulaLogScale), data,
+                              na.action = na.pass)
+    XLogScale <- Matrix::sparse.model.matrix(terms(mfLogScale),
+                                        data = mfLogScale,
+                                        transpose = TRUE,
+                                        row.names = FALSE,
+                                        drop.unused.levels = drop.unused.levels)
+    if(inherits(XLogScale,"dgCMatrix"))
+        XLogScale <- as(XLogScale,"dgTMatrix")
+
+    if(!is.null(lme4::findbars(formulaLogScale)))
+        warning("formulaLogScale does not allow random effets. Random effect terms were removed.")
+    
+##### Prepare proportion model matrix #####
+    mfTheta <- model.frame(lme4::nobars(formulaProportion), data,
+                              na.action = na.pass)
+    XTheta <- Matrix::sparse.model.matrix(terms(mfTheta),
+                                        data = mfTheta,
+                                        transpose = TRUE,
+                                        row.names = FALSE,
+                                        drop.unused.levels = drop.unused.levels)
+    if(inherits(XTheta,"dgCMatrix"))
+        XTheta <- as(XTheta,"dgTMatrix")
+
+    if(is.null(lme4::findbars(formulaProportion))){
+        ZT <- list()
+        UT <- array(0,dim = c(0))
+        attr(UT,"rdim") <- integer(0)
+        attr(UT,"cdim") <- integer(0)
+        attr(UT,"adim") <- integer(0)
+        UTcor <- array(0, dim = c(0))
+        attr(UTcor,"rdim") <- integer(0)
+        attr(UTcor,"cdim") <- integer(0)        
+        UTlogSd <- array(0, dim = c(0))
+        attr(UTlogSd,"rdim") <- integer(0)
+        attr(UTlogSd,"cdim") <- integer(0)        
+    }else{
+        rtZT <- lme4::lFormula(formulaProportion,data, na.action = na.pass, control = lc)$reTrms
+        ZT <- lapply(rtZT$Ztlist,function(xx){
+            as(xx,"dgTMatrix")
+        })
+        ZTnms <- rtZT$cnms
+        ZTrdim <- sapply(rtZT$cnms,length)
+        ZTcdim <- sapply(rtZT$flist,nlevels)
+        UT <- array(numeric(sum(ZTrdim * ZTcdim * (Ngroups-1))))
+        attr(UT,"rdim") <- as.integer(ZTrdim * ZTcdim)
+        attr(UT,"cdim") <- as.integer(rep(Ngroups-1, length(ZT)))
+        n <- ZTrdim * (ZTrdim - 1) / 2
+        UTcor <- array(0, dim = sum(n*(Ngroups-1)))
+        attr(UTcor,"rdim") <- as.integer(n)
+        attr(UTcor,"cdim") <- as.integer(rep(Ngroups-1, length(ZT)))
+        UTlogSd <- array(2, dim = sum(ZTrdim * (Ngroups-1)))
+        attr(UTlogSd,"rdim") <- as.integer(ZTrdim)
+        attr(UTlogSd,"cdim") <- as.integer(rep(Ngroups-1, length(ZT)))
+   }
+
+    
+##### Prepare proportion overdispersion model matrix #####
+    ## mfDisp <- model.frame(formulaDispersion, data,
+    ##                           na.action = na.fail)
+    ## XDisp <- Matrix::sparse.model.matrix(terms(mfDisp),
+    ##                                       data = mfDisp,
+    ##                                       transpose = TRUE,
+    ##                                       row.names = FALSE,
+    ##                                       drop.unused.levels = drop.unused.levels)
+    ## if(inherits(XDisp,"dgCMatrix"))
+    ##     XDisp <- as(XDisp,"dgTMatrix")
+
+##### Prepare confusion matrices #####
+    MIn <- CMA
+    for(i in seq_along(MIn)){
+        if(dim(MIn[[1]])[1] == 1){
+            MIn[[i]] <- 1
+        }else{
+            MIn[[i]] <- expm::logm(MIn[[i]] + diag(1e-10, dim(MIn[[i]])[1]))
+            diag(MIn[[i]]) <- 1
+        }
+        MIn[[i]] <- log(MIn[[i]])
     }
+
+    MInCMOE <- as.array(unname(unlist(MIn)))
+    attr(MInCMOE,"rdim") <- as.integer(unname(sapply(MIn,nrow)))
+    attr(MInCMOE,"cdim") <- as.integer(unname(sapply(MIn,ncol)))
+
+##### Handle NA in group #####
+    ## Guse <- group
+    ## if(any(is.na(Guse))){
+    ##     indx <- which(is.na(Guse))
+    ##     if(any(confusionLevelTypes[confusionGroup[indx]] != "Unknown"))
+    ##         stop("All observations with NA in group must have a confusionGroup with confusionLevelType equal to 'Unknown'")
+    ##     Guse[indx] <- levels(group)[1]
+    ## }
 
     ## if(any(is.na(dispersionGroup)))
     ##     stop("dispersionGroup can not have NA")
     
-    if(!is.factor(dispersionGroup))
-        dispersionGroup <- factor(dispersionGroup)
+    ## if(!is.factor(dispersionGroup))
+    ##     dispersionGroup <- factor(dispersionGroup)
+
+#####
+
+    increaseFirstCoordinate <- ifelse(forceMeanIncrease || all(is.na(group)), 1L, 0L)
+
+    xx <- lapply(groupConversionList, function(x) t(x)%*%x)
+    xxIndx <- apply(group,2,function(x) !all(is.na(x)))
+    if(sum(xxIndx) > 0){
+        xxR <- Reduce("+", xx[xxIndx])
+        ee <- eigen(xxR)
+    }else{
+        ee <- list(value = 1)
+    }
+    if(any(abs(ee$value) < 1e-8)){
+        eeV <- ee$vector
+        identifyMatrix <- unique(do.call("rbind",lapply(as.data.frame(eeV[,ee$value < 1e-8,drop=FALSE]),
+                                                        function(x){ i <- which(abs(x) > 1e-4);
+                                                            as.matrix(subset(expand.grid(i,i),Var1 < Var2)) - 1})
+                                         ))
+        identifyMatrix <- identifyMatrix[order(identifyMatrix[,1]),,drop=FALSE]
+
+    }else{
+        identifyMatrix <- matrix(NA_integer_,0,2)
+    }
+
     
 ##### Data for TMB #####
-    dat <- list(model = ifelse(independent,0L,1L),
-                G = Guse,
-                Y = t(y),
+    dat <- list(model = observationType,
+                G = group,
+                Gnlevels = groupNlevels,
+                Gconversion = groupConversionList,
+                Y = yUse,
                 X = X,
                 XCom = XCom,
-                proportionGroup = proportionGroup,
-                confusionGroup = confusionGroup,
-                dispersionGroup = dispersionGroup,
-                penalty = lp_penalty,
+                XLogScale = XLogScale,
+                XTheta = XTheta,
+                Z = Z,
+                ZCom = ZCom,
+                ZTheta = ZT,
+                ## proportionGroup = proportionGroup,
+                ## confusionGroup = confusionGroup,
+                ## dispersionGroup = dispersionGroup,
+                penalty = ifelse(is.na(lp_penalty),0,lp_penalty),
                 Y_pred = array(0,dim=c(0,0)),
+                G_pred = matrix(0L, 0, 0),
                 X_pred = as(matrix(0,0,0),"dgTMatrix"),
                 XCom_pred = as(matrix(0,0,0),"dgTMatrix"),
-                proportionGroup_pred = factor(),
-                dispersionGroup_pred = factor()
+                XLogScale_pred = as(matrix(0,0,0),"dgTMatrix"),
+                XTheta_pred = as(matrix(0,0,0),"dgTMatrix"),
+                Z_pred = list(),
+                ZCom_pred = list(),
+                ZTheta_pred = list(),
+                ## proportionGroup_pred = factor(),
+                ## dispersionGroup_pred = factor(),
+                increaseFirstCoordinate = increaseFirstCoordinate,
+                identifyMatrix = identifyMatrix,
+                knots = SPLknots
                 )
-    
+
 ##### Parameters for TMB #####
-    n <- nrow(dat$Y)
+    n <- nFeat ## nrow(dat$Y)
     ## par list
-    mndim <- c(nrow(dat$X), nrow(dat$Y), nlevels(dat$G))
+    mndim <- c(nrow(dat$X), nFeat * ifelse(observationType==2,nrow(dat$Y)-1,1), dat$Gnlevels[1])
     mn <- array(rnorm(prod(mndim),0,0.001), dim = mndim)
     ##mn <- sapply(levels(dat$G),function(i)apply(dat$X[,dat$G==i,drop=FALSE],1,mean))
-    if(independent){
+    if(independent || observationType %in% c(1,2,3,4)){
         corcalc <- 0
     }else{
         ##corcalc <- t(chol(stats::cor(t(dat$Y))))[lower.tri(t(chol(stats::cor(t(dat$Y)))),diag = FALSE)]
         corcalc <- 0
     }
+
+    if(observationType %in% c(1,2)){
+        logSd <- numeric(0)
+    }else if(observationType %in% c(3,4)){
+        logSd <- numeric(2)
+    }else{
+        logSd <- log(apply(dat$Y,1,sd))+2
+    }
+    
+    
     if(!is.null(cl$parlist)){
         par <- eval(cl$parlist)
         if(!is.null(cl$lambda))
             par$logLambda <- log(lambda)
     }else{
         par <- list(mu = mn,
-                    commonMu = matrix(0,nrow(dat$XCom),nrow(dat$Y)),
-                    logSigma = matrix(log(apply(dat$Y,1,sd))+2,n,nlevels(dat$G)),
-                    corpar = matrix(corcalc,(n*n-n)/2,nlevels(dat$G)),
+                    commonMu = matrix(0,nrow(dat$XCom),nFeat * ifelse(observationType==2,nrow(dat$Y)-1,1)),
+                    logSigma = matrix(logSd,
+                                      ifelse(observationType%in%c(1,2),0,ifelse(observationType%in%c(3,4),2,n)),
+                                      dat$Gnlevels[1]),
+                    corpar = matrix(corcalc,
+                                    ifelse(observationType%in%c(1,2,3,4),0,(n*n-n)/2),
+                                    dat$Gnlevels[1]),
+                    U = U,
+                    Ucor = Ucor,
+                    UlogSd = UlogSd,
+                    UCom = UC,
+                    UComcor = UCcor,
+                    UComlogSd = UClogSd,
+                    UTheta = UT,
+                    UThetacor = UTcor,
+                    UThetalogSd = UTlogSd,
                     logLambda = rep(log(lambda),length.out = 2),
-                    thetaIn = matrix(0.0,nlevels(dat$G)-1,
-                                     nlevels(proportionGroup)),
-                    MIn = MIn,
-                    tmixpIn = matrix(qlogis(tMixture+0.01*as.numeric(estimateTMix)), n, nlevels(dat$G)),
-                    logDf = matrix(log(tDf), n, nlevels(dat$G)),
-                    logSdDispersion = 0,
-                    dispersion = matrix(0.0,nlevels(dat$G)-1,
-                                        nlevels(dispersionGroup))
+                    betaLogScale = array(0, dim = c(nrow(dat$XLogScale), nFeat, Ngroups)),
+                    betaTheta = matrix(0, nrow(dat$XTheta), Ngroups-1),
+                    ## thetaIn = matrix(0.0,groupNlevels[1]-1,
+                    ##                  nlevels(proportionGroup)),
+                    MIn = MInCMOE,
+                    tmixpIn = matrix(qlogis(tMixture+0.01*as.numeric(estimateTMix)), n, dat$Gnlevels[1]),
+                    logDf = matrix(log(tDf), n, dat$Gnlevels[1])
                     )
     }
-    np <- Reduce("+",lapply(par,length))
+    
+    np <- Reduce("+",lapply(par[!(names(par) %in% c("U","UCom","UTheta"))],length))
 
     
 ##### Map for TMB #####
@@ -249,51 +526,87 @@ mlld <- function(## Data related
                 logDf = factor(tDfMap)
                 )
 
-    if(nlevels(dispersionGroup) == 0){
-        map$logSdDispersion = factor(NA)
-        map$dispersion = factor(rep(NA, length(par$dispersion)))        
-    }
+    ## if(nrow(dat$XDisp) == 0){
+    ##     map$logSdDispersion = factor(NA)
+    ##     map$dispersion = factor(rep(NA, length(par$dispersion)))        
+    ## }
 
     if(nrow(par$commonMu) > 0){
         cMuMap <- matrix(1:length(par$commonMu),nrow(par$commonMu),ncol(par$commonMu))
         cMuMap[1,] <- NA    
         map$commonMu <- factor(cMuMap)
     }
+    if(nrow(par$betaLogScale) > 0){
+            blsMap <- array(1:length(par$betaLogScale),dim = dim(par$betaLogScale))
+        if(observationType %in% c(1,3,4)){
+            blsMap[] <- NA
+        }else if(observationType == 0){
+            blsMap[1,,] <- NA
+        }else if(observationType == 2){ # For observationType == 2, it is used for dirichlet multinomial
+            blsMap[,!SNP2dm,] <- NA
+            par$betaLogScale[,!SNP2dm,] <- Inf
+        }                        
+        map$betaLogScale <- factor(blsMap)
+    }
     if(all(is.na(map$commonMu))){
         map$logLambda <- factor(c(1,NA))
     }
-    if(isTRUE(all.equal(lp_penalty,0))){
+    if(all(is.na(lp_penalty))){
         map$logLambda <- factor(par$logLambda*NA)
         rnd <- c()
     }else{
         rnd <- c("mu","commonMu")
     }
-    if(nlevels(dispersionGroup) > 1){
-        rnd <- c(rnd,"dispersion")
-    }
-    
+    ## if(nrow(dat$XDisp) > 0){
+        rnd <- c(rnd,"U","UCom","UTheta")
+    ## }
+
     npfix <- Reduce("+",lapply(map,function(x)sum(is.na(x))))
-    if(np-npfix > nrow(y) / 10)
-        warning(sprintf("The model has %s parameters with only %s observations - %.2f observations per parameter. There is a high risk of overfitting.",np-npfix,nrow(y),nrow(y)/(np-npfix))) 
+    if(np-npfix > nObs / 10)
+        warning(sprintf("The model has %s parameters with only %s observations - %.2f observations per parameter. There is a high risk of overfitting.",np-npfix,nObs,nObs/(np-npfix)))
+#### return(list(dat=dat,par=par,map=map))
 ##### Make TMB object #####
     obj <- TMB::MakeADFun(dat,par,map,
                           silent = silent, profile = rnd,
                           DLL = "otoclass")
+
+    if(fixZeroGradient && any((ogr <- obj$gr()) == 0)){
+        toFix <- split(ogr == 0,names(obj$par))
+        for(nn in names(toFix))
+            if(any(toFix[[nn]])){
+                if(is.null(map[[nn]]))
+                    map[[nn]] <- factor(seq_along(toFix[[nn]]))
+                map[[nn]][!is.na(map[[nn]])][toFix[[nn]]] <- NA
+                map[[nn]] <- factor(map[[nn]])
+            }
+        obj <- TMB::MakeADFun(dat,par,map,
+                              silent = silent, profile = rnd,
+                              DLL = "otoclass")
+    }
+
+    
     if(onlyObj)
         return(obj)
+
     low <- rep(-Inf, length(obj$par))
-    low[names(obj$par) %in% "logSdDispersion"] <- -10
+    for(nn in names(lower))
+        low[names(obj$par) %in% nn] <- as.vector(lower[[nn]])
+    upp <- rep(Inf, length(obj$par))
+    for(nn in names(upper))
+        upp[names(obj$par) %in% nn] <- as.vector(upper[[nn]])
+    
     opt <- stats::nlminb(obj$par,
                          obj$fn,
                          obj$gr,
                          lower = low,
+                         upper = upp,
                          control = control)
     opt$double_objective <- obj$env$f(obj$env$last.par.best, type="double")
     rp <- obj$report(obj$env$last.par.best)
 
     muNames <- list(rownames(dat$X),
                     colnames(y),
-                    levels(group))
+                    groupLevels[[1]])
     commonMuNames <- list(rownames(dat$XCom),
                           colnames(y))
 
@@ -306,14 +619,22 @@ mlld <- function(## Data related
 
     xlevels <- .getXlevels(terms(mf), mf)
     xlevelsCommon <- .getXlevels(terms(mfCommon), mfCommon)
+    xlevelsTheta <- .getXlevels(terms(mfTheta), mfTheta)
+    ## xlevelsDisp <- .getXlevels(terms(mfDisp), mfDisp)
 
     res <- list(call = cl,
                 terms = terms(mf),
                 termsCommon = terms(mfCommon),
+                termsTheta = terms(mfTheta),
+                ## termsDisp = terms(mfDisp),
                 xlevels = xlevels,
                 xlevelsCommon = xlevelsCommon,
+                xlevelsTheta = xlevelsTheta,
+                ## xlevelsDisp = xlevelsDisp,
                 all_vars = colnames(get_all_vars(terms(mf), data)),
                 all_varsCommon = colnames(get_all_vars(terms(mfCommon), data)),
+                all_varsTheta = colnames(get_all_vars(terms(mfTheta), data)),
+                ## all_varsDisp = colnames(get_all_vars(terms(mfDisp), data)),
                 drop.unused.levels = drop.unused.levels,
 
                 opt = opt,
@@ -324,31 +645,37 @@ mlld <- function(## Data related
                 silent = silent,
                 lp_penalty = lp_penalty,
 
-                confusionMatrixArray = simplify2array(rp$Mvec),
+                confusionMatrixList = (rp$Mvec),
                 confusionLevelTypes = confusionLevelTypes,
 
-                overfit = np-npfix > nrow(y) / 10,                
+                overfit = np-npfix > nObs / 10,                
                 muNames = muNames,
                 commonMuNames = commonMuNames,
 
                 y=y,
                 group = group,
+                groupLevels = groupLevels,
+                
                 data = data,
 
-                proportionGroup = proportionGroup,
-                confusionGroup = confusionGroup,
+                ## proportionGroup = proportionGroup,
+                ## confusionGroup = confusionGroup,
                 
                 tmb_data = obj$env$data,
                 tmb_map = map,
                 tmb_random = rnd,
+
+                identifyMatrix = identifyMatrix,
                                 
                 varBetweenGroups = NA,
                 varWithinGroups = NA
                 )
                 
     class(res) <- "mlld"
-    res$varBetweenGroups <- calculateVarBetweenGroups(res)
-    res$varWithinGroups <- calculateVarWithinGroups(res)
+    if(observationType == 0){
+        res$varBetweenGroups <- calculateVarBetweenGroups(res)
+        res$varWithinGroups <- calculateVarWithinGroups(res)
+    }
     
     return(res)    
 }
@@ -358,4 +685,10 @@ print.mlld <- function(x, ...){
     print(x$opt)
 }
     
-         
+
+
+
+##' @export
+AIC.mlld <- function(x, k = 2, ...){
+    k * x$opt$objective + k * length(x$opt$par)
+}

@@ -199,3 +199,42 @@ efdOld <- function(dat, N, returnAsList=FALSE, normalize = FALSE){
         return(unlist(res))
     }
 }
+
+
+##' Fourier Series Basis for Splines
+##'
+##' @param x the predictor variable
+##' @param N Half the number of basis functions. Both a cos and a sin basis function will be added.
+##' @param Boundary Boundary points that determines a period
+##' @return A matrix of dimension 'c(length(x), 2*N)'.
+##' @author Christoffer Moesgaard Albertsen
+##' @export
+fs <- function(x, N, Boundary = range(x)){
+    if(length(N) == 1)
+        N <- seq_len(N)
+    Boundary <- sort(Boundary)
+    x0 <- (x - Boundary[1]) / diff(Boundary)
+    basis <- do.call("cbind",lapply(N, function(i){
+        m <- cbind(A = cos(2 * pi * i * x0),
+                   B = sin(2 * pi * i * x0))
+        colnames(m) <- paste0(colnames(m),i)
+        m
+    }))
+    a <- list(N = N, Boundary = Boundary)
+    attributes(basis) <- c(attributes(basis), a)
+    class(basis) <- c("fs","matrix")
+    basis
+}
+##' @author Christoffer Moesgaard Albertsen
+##' @method makepredictcall fs
+##' @importFrom stats makepredictcall
+##' @export
+makepredictcall.fs <- function(var, call){
+    if (as.character(call)[1L] != "fs") 
+        return(call)
+     at <- attributes(var)[c("N", "Boundary")]
+    xxx <- call[1L:2]
+    xxx[names(at)] <- at
+    xxx
+
+}

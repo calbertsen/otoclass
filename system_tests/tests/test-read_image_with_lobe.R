@@ -39,7 +39,7 @@ for(i in 1:nrow(efds)){
     areaX <- Reduce("+",lapply(spx@polygons,function(x)x@area))
     spdiff <- gDifference(spim,spx)
 
-    is_true(Reduce("+",lapply(spdiff@polygons,function(x)x@area)) / areaX < 0.4 / 1000 )## / prod(picDim) < 0.1 / 1000)
+    is_true(Reduce("+",lapply(spdiff@polygons,function(x)x@area)) / areaX < 0.5 / 1000 )## / prod(picDim) < 0.1 / 1000)
 }
 
 
@@ -71,6 +71,6 @@ for(i in 1:nrow(efds)){
     areaX <- Reduce("+",lapply(spx@polygons,function(x)x@area))
     spdiff <- gDifference(spim,spx)
 
-    is_true(Reduce("+",lapply(spdiff@polygons,function(x)x@area)) / areaX < 0.4 / 1000 )## / prod(picDim) < 0.1 / 1000)
+    is_true(Reduce("+",lapply(spdiff@polygons,function(x)x@area)) / areaX < 0.5 / 1000 )## / prod(picDim) < 0.1 / 1000)
 }
 

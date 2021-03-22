@@ -20,7 +20,8 @@ Imports:
     Matrix,
     methods,
     graphics,
-    expm
+    expm,
+    lme4
 Suggests:
     shiny
 LinkingTo: RcppEigen,

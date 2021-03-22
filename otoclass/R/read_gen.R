@@ -12,10 +12,10 @@ toAlleleMatrix <- function(G, giveNames = FALSE){
             n <- length(x)
             v <- c(paste0(x[seq_len(n/2)],collapse=""),paste0(x[n/2 + seq_len(n/2)],collapse=""))
             return(sprintf("%03d",as.numeric(v)))
-        }else if(length(x) <= 3){
-            ##stop("Haploid data are not currently supported")
-            v <- paste0(x,collapse="")
-            return(c("000",sprintf("%03d",as.numeric(v))))
+        ## }else if(length(x) <= 3){
+        ##     ##stop("Haploid data are not currently supported")
+        ##     v <- paste0(x,collapse="")
+        ##     return(c("000",sprintf("%03d",as.numeric(v))))
         }else{
             stop("Wrong number of allele digits")
         }
@@ -89,7 +89,7 @@ read.gen <- function(f, pop.names, sort.loci = FALSE, sort.individuals = FALSE, 
         ## Find number of columns
         cn <- tail(l[seq_len(popPlace[1]-1)],ncol(genoMat))
     }
-    alleleNames <- lapply(as.list(as.data.frame(genoMat)),toAlleleMatrix, giveNames = TRUE)
+    alleleNames <- lapply(as.list(as.data.frame(genoMat, stringsAsFactors = FALSE)),toAlleleMatrix, giveNames = TRUE)
     Nallele <- sapply(alleleNames, length)
     if(!all(Nallele == Nallele[1])){
         if(is.na(NAlleleKeep))
@@ -105,7 +105,7 @@ read.gen <- function(f, pop.names, sort.loci = FALSE, sort.individuals = FALSE, 
     }
     names(alleleNames) <- cn
     dimnames(genoMat) <- list(indiId, cn)
-    aMat <- aperm(simplify2array(lapply(as.list(as.data.frame(genoMat)),toAlleleMatrix)),c(1,3,2))
+    aMat <- aperm(simplify2array(lapply(as.list(as.data.frame(genoMat, stringsAsFactors = FALSE)),toAlleleMatrix)),c(1,3,2))
     dimnames(aMat) <- list(NULL, cn, indiId)
     if(sort.loci){
         aMat <- aMat[,order(cn),,drop=FALSE]

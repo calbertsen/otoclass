@@ -1,3 +1,8 @@
+squeeze <- function(u, eps = .Machine$double.eps){
+    (1.0 - eps) * (u - 0.5) + 0.5
+}
+
+
 ##' Maximum likelihood linear discrimination
 ##'
 ##' @param proportionGroup 
@@ -27,6 +32,7 @@ mlld <- function(## Data related
                  lp_penalty = NA,       # -1: Student's t penalty, 0: REML, 1: Lasso / Laplace prior, 2: Ridge / Gaussian prior, p: Lp penalty
                  lambda = 0.4,
                  estimateLambda = TRUE,
+                 REML = FALSE,
                  ## TMixture related
                  tMixture = 0,
                  tDf = 5,
@@ -438,7 +444,21 @@ mlld <- function(## Data related
     n <- nFeat ## nrow(dat$Y)
     ## par list
     mndim <- c(nrow(dat$X), nFeat * ifelse(observationType==2,nrow(dat$Y)-1,1), dat$Gnlevels[1])
-    mn <- array(rnorm(prod(mndim),0,0.001), dim = mndim)
+    mn <- array(rnorm(prod(mndim),0,0.001), dim = mndim) ## 
+    if(observationType == 2){ ## Better starting values for SNP2
+        sv <- sapply(seq_len(dim(dat$Y)[2]), function(i)
+            unlist(lapply(split(as.data.frame(t(dat$Y[,i,])),factor(dat$G[,1]+1,seq_len(dat$Gnlevels[1]))),function(x){ v <- colSums(as.matrix(x)); qlogis(squeeze(v[1]/sum(v))) }))
+            )        
+        mn[1,,][which(!is.nan(sv))] <- unname(sv[which(!is.nan(sv))])
+        if(forceMeanIncrease){
+            isv <- !is.nan(sv[,1])
+            sv[,1] <- approx(x = c(0,seq_len(dat$Gnlevels[1])[isv],dat$Gnlevels[1]+1),
+                             y = c(-10,sv[isv,1],10), xout = seq_len(dat$Gnlevels[1]))$y
+            if(!all(diff(sv[,1]) > 0))
+                warning("Mean values for the first feature does not apear to increase with groups.")
+            mn[1,1,] <- unname(c(sv[1,1], log(diff(sv[,1]))))
+        }
+    }
     ##mn <- sapply(levels(dat$G),function(i)apply(dat$X[,dat$G==i,drop=FALSE],1,mean))
     if(independent || observationType %in% c(1,2,3,4)){
         corcalc <- 0
@@ -551,16 +571,21 @@ mlld <- function(## Data related
     if(all(is.na(map$commonMu))){
         map$logLambda <- factor(c(1,NA))
     }
-    if(all(is.na(lp_penalty))){
-        map$logLambda <- factor(par$logLambda*NA)
-        rnd <- c()
+    if(!REML){
+        if(all(is.na(lp_penalty))){
+            map$logLambda <- factor(par$logLambda*NA)
+            rnd <- c()
+        }else{
+            rnd <- c("mu","commonMu")
+        }
+        RE <- c("U","UCom","UTheta")
     }else{
-        rnd <- c("mu","commonMu")
-    }
-    ## if(nrow(dat$XDisp) > 0){
-        rnd <- c(rnd,"U","UCom","UTheta")
-    ## }
+        if(all(is.na(lp_penalty)))
+            map$logLambda <- factor(par$logLambda*NA)
+        rnd <- c()
+        RE <- c("mu","commonMu","U","UCom","UTheta")
 
+    }
     npfix <- Reduce("+",lapply(map,function(x)sum(is.na(x))))
     if(np-npfix > nObs / 10)
         warning(sprintf("The model has %s parameters with only %s observations - %.2f observations per parameter. There is a high risk of overfitting.",np-npfix,nObs,nObs/(np-npfix)))
@@ -568,6 +593,7 @@ mlld <- function(## Data related
 ##### Make TMB object #####
     obj <- TMB::MakeADFun(dat,par,map,
                           silent = silent, profile = rnd,
+                          random = RE,
                           DLL = "otoclass")
 
     if(fixZeroGradient && any((ogr <- obj$gr()) == 0)){
@@ -581,6 +607,7 @@ mlld <- function(## Data related
             }
         obj <- TMB::MakeADFun(dat,par,map,
                               silent = silent, profile = rnd,
+                              random = RE,
                               DLL = "otoclass")
     }
 

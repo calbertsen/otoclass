@@ -869,6 +869,8 @@ Type objective_function<Type>::operator() () {
   posterior_logprobability_shape.setZero();
   matrix<Type> posterior_logprobability_all(Gnlevels(0), Y.cols());
   posterior_logprobability_all.setZero();
+  matrix<Type> posterior_logprobability_np(Gnlevels(0), Y.cols());
+  posterior_logprobability_np.setZero();
   for(int i = 0; i < Y.cols(); ++i){ // Loop over individuals
     //vector<Type> th = thetaDisp.col(dispersionGroup(i)).col(proportionGroup(i));
     vector<Type> thtmp(Gnlevels(0)-1);
@@ -881,7 +883,6 @@ Type objective_function<Type>::operator() () {
       thtmp += (vector<Type>)(ZTheta(zz).col(i).transpose() *  UTheta.col(zz));
     }
     vector<Type> logTh = toLogProportion(thtmp);
-
     // if(isNA(dispersionGroup(i))){
     //   th = theta.col(proportionGroup(i));
     // }else{
@@ -895,6 +896,7 @@ Type objective_function<Type>::operator() () {
     // Type NormalizationConstant = (Muse*th).sum();
     Type lps = R_NegInf;
     Type postProbNorm = R_NegInf;
+    Type postProbNormNP = R_NegInf;
     // Contribution from G
     // nll -= log(NormalizationConstant);
     // Contrbution from Y
@@ -921,28 +923,32 @@ Type objective_function<Type>::operator() () {
 	posterior_mean.col(j).col(i) = tmpMean;
       // P(Y | S)
       Type ld = -dist[j]->operator()(tmp,tmpMean,scale); // dist returns negative log-likelihood!
-      // P(Y | S) * P(S)
+      // P(Y | S) * P(S)      
       Type ld2 = ld + logTh(j); 
       // P(C_i | S)
       for(int cc = 0; cc < G.cols(); ++cc){
-	if(isNA(G(i,cc)))
-	  continue;
+	if(!isNA(G(i,cc))){
 	matrix<Type> MvecUse = Mvec(cc).transpose() * Gconversion(cc);
 	ld2 += log(MvecUse(G(i,cc),j));
+	}
       }
       // lp(j) = ld + log(th(j)) + log(Muse(j)) - log(NormalizationConstant);
       posterior_logprobability_shape(j,i) = ld + logTh(j);
       posterior_logprobability_all(j,i) = ld2;
+      posterior_logprobability_np(j,i) = ld;
       lps = logspace_add2(lps,ld2);
       postProbNorm = logspace_add2(postProbNorm, posterior_logprobability_shape(j,i));
+      postProbNormNP = logspace_add2(postProbNormNP, ld);
 	    
     }
     for(int j = 0; j < Gnlevels(0); ++j){
       posterior_logprobability_shape(j,i) -= postProbNorm;
       posterior_logprobability_all(j,i) -= lps;
+      posterior_logprobability_np(j,i) -= postProbNormNP;
     }
     nll -= lps;
   }
+ 
   ////////////////////////////////////////////////////////////////////////////
   ///////////////////////////// Regularization ///////////////////////////////
   ////////////////////////////////////////////////////////////////////////////
@@ -1000,6 +1006,7 @@ Type objective_function<Type>::operator() () {
   matrix<Type> pred_prior_logitprobability(Gnlevels(0), Y_pred.cols());
   matrix<Type> pred_posterior_logprobability_shape(Gnlevels(0), Y_pred.cols());
   matrix<Type> pred_posterior_logprobability_all(Gnlevels(0), Y_pred.cols());
+  matrix<Type> pred_posterior_logprobability_np(Gnlevels(0), Y_pred.cols());
   
   for(int i = 0; i < Y_pred.cols(); ++i){ // Loop over individuals
     // vector<Type> th(thetaIn.rows()+1);
@@ -1024,6 +1031,7 @@ Type objective_function<Type>::operator() () {
     
     Type postProbNorm_s = R_NegInf;
     Type postProbNorm_a = R_NegInf;
+    Type postProbNorm_n = R_NegInf;
   
     for(int j = 0; j < Gnlevels(0); ++j){ // Loop over groups
       vector<Type> tmp;
@@ -1051,20 +1059,22 @@ Type objective_function<Type>::operator() () {
       Type ld2 = ld + logTh(j); 
       // P(C_i | S)
       for(int cc = 0; cc < G_pred.cols(); ++cc){
-	if(isNA(G_pred(i,cc)))
-	  continue;
-	matrix<Type> MvecUse = Mvec(cc).transpose() * Gconversion(cc);
-	ld2 += log(MvecUse(G_pred(i,cc),j));
-      }      
-      
+	if(!isNA(G_pred(i,cc))){
+	  matrix<Type> MvecUse = Mvec(cc).transpose() * Gconversion(cc);
+	  ld2 += log(MvecUse(G_pred(i,cc),j));
+	}      
+      }
       pred_posterior_logprobability_shape(j,i) = ld + logTh(j);
       pred_posterior_logprobability_all(j,i) = ld2;
+      pred_posterior_logprobability_np(j,i) = ld;
       postProbNorm_s = logspace_add2(postProbNorm_s, pred_posterior_logprobability_shape(j,i));
       postProbNorm_a = logspace_add2(postProbNorm_a, pred_posterior_logprobability_all(j,i));
+      postProbNorm_n = logspace_add2(postProbNorm_n, pred_posterior_logprobability_np(j,i));
     }
     for(int j = 0; j < Gnlevels(0); ++j){
       pred_posterior_logprobability_shape(j,i) -= postProbNorm_s;
       pred_posterior_logprobability_all(j,i) -= postProbNorm_a;
+      pred_posterior_logprobability_np(j,i) -= postProbNorm_n;      
     }
   }
 
@@ -1081,6 +1091,7 @@ Type objective_function<Type>::operator() () {
   REPORT(posterior_mean);
   REPORT(posterior_logprobability_shape);
   REPORT(posterior_logprobability_all);
+  REPORT(posterior_logprobability_np);
   REPORT(prior_logitprobability);
 
   // ADREPORT(posterior_mean);
@@ -1090,6 +1101,7 @@ Type objective_function<Type>::operator() () {
   REPORT(pred_posterior_mean);
   REPORT(pred_posterior_logprobability_shape);
   REPORT(pred_posterior_logprobability_all);
+  REPORT(pred_posterior_logprobability_np);
   REPORT(pred_prior_logitprobability);
 
   // ADREPORT(pred_posterior_mean);

@@ -159,8 +159,8 @@ mlld <- function(## Data related
                 isFixed <- confusionLevelTypes[1:i]=="Fixed"
                 CMA[[i]] <- confusionMatrixList[[sum(isFixed)]]
             }else if(confusionLevelTypes[i] == "Estimate"){
-                CMA[[i]][] <- 0.1/nrow(CMA[[i]])
-                diag(CMA[[i]]) <- 0.9
+                CMA[[i]][] <- 0.01/nrow(CMA[[i]])
+                diag(CMA[[i]]) <- 0.99
             }
         }
     }

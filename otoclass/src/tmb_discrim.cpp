@@ -769,12 +769,13 @@ Type objective_function<Type>::operator() () {
   // Transform confusionw
   vector<matrix<Type> > Mvec(MIn.cols());
   for(int k = 0; k < MIn.cols(); ++k){
-    matrix<Type> Mtmp = MIn.col(k);
+    matrix<Type> Mtmp1 = MIn.col(k);
+    matrix<Type> Mtmp(Mtmp1.rows(), Mtmp1.cols());
+    Mtmp.setZero();
     for(int j = 0; j < Mtmp.cols(); ++j){
-      Mtmp(j,j) = 0.0;
       for(int i = 0; i < Mtmp.rows(); ++i){
 	if(i != j){
-	  Mtmp(i,j) = exp(Mtmp(i,j));
+	  Mtmp(i,j) = exp(Mtmp1(i,j));
 	  Mtmp(j,j) -= Mtmp(i,j);
 	}
       }

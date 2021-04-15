@@ -41,19 +41,13 @@ print.otolith_image <- function(x, ...){
 plot.otolith_image <- function(x,asUsed = FALSE, ...){
     pic <- getPixelMatrix(attr(x,"File"))
     if(asUsed){
-        pic <- transformPixelMatrix(pic,
-                                    logisticTransform = attr(x,"LogisticTransform")$used,
-                                    logisticTransformLocation = attr(x,"LogisticTransform")$location,
-                                    logisticTransformScale = attr(x,"LogisticTransform")$scale,
-                                    gaussianBlur = attr(x,"GaussianBlur")$used,
-                                    gaussianBlurSize = attr(x,"GaussianBlur")$size,
-                                    gaussianBlurSigma = attr(x,"GaussianBlur")$sigma,
-                                    unsharp = attr(x,"UnsharpMask")$used,
-                                    floodFillTolerance = attr(x,"floodFillTolerance")
-                                    )
+        args <- c(list(pic = pic), attr(x,"Transformation"))
+        pic <- do.call(transformPixelMatrix, args)
     }
-    graphics::par(mar = c(0,0,0,0), oma = c(0,0,0,0))
-    graphics::plot(0,0,xlim=c(1,ncol(pic)),ylim=c(1,nrow(pic)),asp=1, type = "n")
+    #graphics::par(mar = c(0,0,0,0), oma = c(0,0,0,0))
+    graphics::plot(0,0,xlim=c(1,ncol(pic)),ylim=c(1,nrow(pic)),asp=1, type = "n", axes = FALSE,
+                   xlab = NA, ylab = NA)
+    #par(usr = c(1,ncol(pic),1,nrow(pic))
     graphics::rasterImage(pic / 255,1,1,ncol(pic),nrow(pic))
     invisible(lapply(x,graphics::lines, ...))
     invisible(x)
@@ -73,19 +67,14 @@ plot.otolith_image <- function(x,asUsed = FALSE, ...){
 plot.otolith_contour <- function(x,asUsed = FALSE, ...){
     pic <- getPixelMatrix(attr(x,"File"))
     if(asUsed){
-        pic <- transformPixelMatrix(pic,
-                                    logisticTransform = attr(x,"LogisticTransform")$used,
-                                    logisticTransformLocation = attr(x,"LogisticTransform")$location,
-                                    logisticTransformScale = attr(x,"LogisticTransform")$scale,
-                                    gaussianBlur = attr(x,"GaussianBlur")$used,
-                                    gaussianBlurSize = attr(x,"GaussianBlur")$size,
-                                    gaussianBlurSigma = attr(x,"GaussianBlur")$sigma,
-                                    unsharp = attr(x,"UnsharpMask")$used,
-                                    floodFillTolerance = attr(x,"floodFillTolerance")
-                                    )
+        args <- c(list(pic = pic), attr(x,"Transformation"))
+        pic <- do.call(transformPixelMatrix, args)
     }
-    graphics::par(mar = c(0,0,0,0), oma = c(0,0,0,0))
-    graphics::plot(0,0,xlim=c(1,ncol(pic)),ylim=c(1,nrow(pic)),asp=1, type = "n")
+    ##graphics::par(mar = c(0,0,0,0), oma = c(0,0,0,0))
+    graphics::plot(0,0,xlim=c(1,ncol(pic)),ylim=c(1,nrow(pic)),
+                   asp=1, type = "n", axes = FALSE,
+                   xlab = NA, ylab = NA)
+    #    par(usr = c(1,ncol(pic),1,nrow(pic))
     graphics::rasterImage(pic / 255,1,1,ncol(pic),nrow(pic))
     graphics::lines(x, ...)
     invisible(x)

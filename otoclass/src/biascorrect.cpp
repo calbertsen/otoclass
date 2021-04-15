@@ -22,7 +22,7 @@ namespace biascorrect {
   Array<Float,Dynamic,1> logistic(Array<Float,Dynamic,1> x){
     Array<Float,Dynamic,1> y(x.size()+1);
     Float ysum = 1.0;
-    for(int i = 0; i < x.size(); ++i){
+    for(int i = 0; i < (int)x.size(); ++i){
       y(i) = exp(x(i));
       ysum += y(i);
     }
@@ -34,7 +34,7 @@ namespace biascorrect {
     GrAD::ADparlist<double>* grd = new GrAD::ADparlist<double>();
     typedef GrAD::AD<double> AD;
     Array<AD,Dynamic,1> xf(x.size());
-    for(int i = 0; i < x.size(); ++i){
+    for(int i = 0; i < (int)x.size(); ++i){
       xf(i) = AD(x(i));
       grd->Independent(xf(i));
     }
@@ -42,9 +42,9 @@ namespace biascorrect {
     Array<AD,Dynamic,1> y = logistic(xf);
     MatrixXd m(y.size(),x.size());
     m.setZero();    
-    for(int i = 0; i < y.size(); ++i){
+    for(int i = 0; i < (int)y.size(); ++i){
       GrAD::vector<double> tmp = y(i).gr();//.getDeriv();
-      for(int j = 0; j < tmp.size(); ++j)
+      for(int j = 0; j < (int)tmp.size(); ++j)
       	m(i,j) = tmp[j];
     }
     delete grd;
@@ -74,7 +74,7 @@ namespace biascorrect {
   GrAD::ADparlist<double>* grd = new GrAD::ADparlist<double>();
   typedef GrAD::AD<double> AD;
     Array<AD,Dynamic,1> xf(x.size());
-    for(int i = 0; i < x.size(); ++i){
+    for(int i = 0; i < (int)x.size(); ++i){
       xf(i) = AD(x(i));
       grd->Independent(xf(i));
     }
@@ -83,7 +83,7 @@ namespace biascorrect {
     doubleVector r(x.size());
     r.setZero();    
     GrAD::vector<double> tmp = nll.gr();//.getDeriv();
-    for(int j = 0; j < tmp.size(); ++j)
+    for(int j = 0; j < (int)tmp.size(); ++j)
       r(j) = tmp[j];
     delete grd;
     return r;

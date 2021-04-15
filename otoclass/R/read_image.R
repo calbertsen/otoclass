@@ -136,41 +136,61 @@ getPixelMatrix <- function(file, grey=TRUE){
     return(imOut)
 }
 
+extendPic <- function(pic, kernelSize){
+    nr <- nrow(pic)
+    nc <- ncol(pic)
+    picOld <- pic
+    borderCol <- mean(c(pic[c(1:(nr*0.02),nr:(nr-nr*0.02)),],pic[,c(1:(nc*0.02),nc:(nc-nc*0.02))]))
+    pic <- matrix(borderCol,nr + (kernelSize-1),nc + (kernelSize-1))
+    pic[((kernelSize-1)/2+1):(nrow(pic)-(kernelSize-1)/2),((kernelSize-1)/2+1):(ncol(pic)-(kernelSize-1)/2)] <- picOld
+    pic
+}
+
 ##' @importFrom stats plogis
 transformPixelMatrix <- function(pic,
-                                 logisticTransform = FALSE,
+                                 transformations = character(0),
                                  logisticTransformLocation = 255/2,
                                  logisticTransformScale = 1,
-                                 gaussianBlur = FALSE,
                                  gaussianBlurSize = 3,
                                  gaussianBlurSigma = 1,
-                                 unsharp = FALSE,
-                                 floodFillTolerance = 0) {
-    if(logisticTransform){
-        pic <- stats::plogis(pic,logisticTransformLocation,logisticTransformScale) * 255     
+                                 floodFillTolerance = 0.1) {
+    if(length(transformations) == 0)
+        return(pic)
+    tIndx <- pmatch(transformations, c("logistic","gaussianBlur","unsharp","floodFill","sobel","edgeDetect","centerFloodFill"), duplicates.ok = TRUE)
+    ## Size of input
+    resizeInput <- function(y,i){
+        xx <- rep(NA, length(tIndx))
+        xx[tIndx %in% i] <- rep(y, length.out = sum(tIndx %in% i))
+        xx
     }
-    if(gaussianBlur & !unsharp){
-            nr <- nrow(pic)
-            nc <- ncol(pic)
-            picOld <- pic
-            borderCol <- mean(c(pic[c(1:(nr*0.02),nr:(nr-nr*0.02)),],pic[,c(1:(nc*0.02),nc:(nc-nc*0.02))]))
-            pic <- matrix(borderCol,nr + (gaussianBlurSize-1),nc + (gaussianBlurSize-1))
-            pic[((gaussianBlurSize-1)/2+1):(nrow(pic)-(gaussianBlurSize-1)/2),((gaussianBlurSize-1)/2+1):(ncol(pic)-(gaussianBlurSize-1)/2)] <- picOld
-            pic <- gaussian_blur(pic, gaussianBlurSize, gaussianBlurSigma)
-    }
-    if(unsharp){
-        nr <- nrow(pic)
-        nc <- ncol(pic)
-        picOld <- pic
-        borderCol <- mean(c(pic[c(1:(nr*0.02),nr:(nr-nr*0.02)),],pic[,c(1:(nc*0.02),nc:(nc-nc*0.02))]))
-        pic <- matrix(borderCol,nr + (gaussianBlurSize-1),nc+(gaussianBlurSize-1))
-        pic[((gaussianBlurSize-1)/2+1):(nrow(pic)-(gaussianBlurSize-1)/2),((gaussianBlurSize-1)/2+1):(ncol(pic)-(gaussianBlurSize-1)/2)] <- picOld
-        pic <- round(unsharpmask(pic, gaussianBlurSize, gaussianBlurSigma))
-        pic[pic < 0] <- 0
-        pic[pic > 255] <- 255
-    }
-    if(floodFillTolerance > 0){
-        pic <- floodfill(pic, floodFillTolerance)
+    logisticTransformLocation = resizeInput(logisticTransformLocation,1)
+    logisticTransformScale = resizeInput(logisticTransformScale,1)
+    gaussianBlurSize = resizeInput(gaussianBlurSize, c(2,3))
+    gaussianBlurSigma = resizeInput(gaussianBlurSigma, c(2,3))
+    floodFillTolerance = resizeInput(floodFillTolerance, c(4,7))
+    
+    for(ii in seq_along(tIndx)){
+        vv <- tIndx[ii]
+        if(is.na(vv)){
+            warning(sprintf("Wrong transformation option: %s", transformations[ii]))
+        }else if(vv == 1){ ## logistic transform
+            pic <- stats::plogis(pic,logisticTransformLocation[ii],
+                                 logisticTransformScale[ii]) * 255     
+        }else if(vv == 2){ ## Gaussian blur
+               pic <- gaussian_blur(extendPic(pic, gaussianBlurSize[ii]), gaussianBlurSize[ii], gaussianBlurSigma[ii])
+        }else if(vv == 3){ ## Unsharp          
+            pic <- round(unsharpmask(extendPic(pic, gaussianBlurSize[ii]), gaussianBlurSize[ii], gaussianBlurSigma[ii]))
+            pic[pic < 0] <- 0
+            pic[pic > 255] <- 255
+        }else if(vv == 4){ ## Flood fill
+            pic <- floodfill(pic, floodFillTolerance[ii])
+        }else if(vv == 5){ ## Sobel           
+            pic <- to01(sobel(extendPic(pic,3))) * 255
+        }else if(vv == 6){ ## edgeDetect
+            pic <- to01(edge_detect(extendPic(pic,3))) * 255
+        }else if(vv == 7){ ## Center flood fill
+            pic <- floodfill(otoclass:::to01(pic)*255, floodFillTolerance[ii], ncol(pic)/2, nrow(pic)/2, TRUE, 255)
+        }
     }
     return(pic)
 }
@@ -183,13 +203,11 @@ transformPixelMatrix <- function(pic,
 ##' @param minPixelDiff Minimum pixel difference between otoliths
 ##' @param extreme Boolean value. Should pixel values be converted to 0/1?
 ##' @param borderBasedCutOff Use a border based cut off?
-##' @param logisticTransform Do logistic transformation of image?
+##' @param transformations Vector of image transformations: logistic, gaussianBlur, unsharp, floodFill
 ##' @param logisticTransformLocation Location parameter for logistic transformation
 ##' @param logisticTransformScale Scale parameter for logistic transformation
-##' @param gaussianBlur Do Gaussian blur of image?
 ##' @param gaussianBlurSize Size (n x n) for Gaussian blur kernel
 ##' @param gaussianBlurSigma Variance parameter of Gaussian distribution used to blur
-##' @param unsharp Do unsharp mask of image using the Gaussian blur arguments?
 ##' @param pixelwise Boolean value. If TRUE, a pixel-wise algorithm is used to extract contours; otherwise, \code{grDevices::contourLines} is used.
 ##' @param assignSinglesByPosition Should single otoliths be assigned to Left/Right based on position on image?
 ##' @param minCountScale See details
@@ -207,15 +225,13 @@ read_image<- function(file,
                       onlyOne = FALSE,
                       minPixelDiff = 0.05 * min(nc,nr),
                       extreme = TRUE,
-                      floodFillTolerance = 0,
+                      floodFillTolerance = 0.1,
                       borderBasedCutOff = FALSE,
-                      logisticTransform = FALSE,
+                      transformations = character(0),
                       logisticTransformLocation = c("mean","median","borderMean","borderMedian"),
                       logisticTransformScale = 1,
-                      gaussianBlur = FALSE,
                       gaussianBlurSize = round(0.02 * min(nc,nr)),
                       gaussianBlurSigma = gaussianBlurSize / 10,
-                      unsharp = FALSE,
                       pixelwise = FALSE,
                       assignSinglesByPosition = TRUE,
                       minCountScale = 0,
@@ -235,29 +251,22 @@ read_image<- function(file,
 
     if(!is.numeric(logisticTransformLocation)){
         logisticTransformLocation <- match.arg(logisticTransformLocation)
-    }
-    ltl <- NA
-    if(logisticTransform){
         bordervec <- c(rv[c(1:(nr*0.02),nr:(nr-nr*0.02)),],rv[,c(1:(nc*0.02),nc:(nc-nc*0.02))])
-        if(is.numeric(logisticTransformLocation)){
-            ltl <- logisticTransformLocation[1]
-        }else{
-            ltl <- switch(logisticTransformLocation,
-                          mean = mean(rv),
-                          median = stats::median(rv),
-                          borderMean = mean(bordervec),
-                          borderMedian = stats::median(bordervec)
-                          )
-        }       
+        logisticTransformLocation <- sapply(logisticTransformLocation, function(ltf){
+            switch(ltf,
+                   mean = mean(rv),
+                   median = stats::median(rv),
+                   borderMean = mean(bordervec),
+                   borderMedian = stats::median(bordervec)
+                   )
+        })       
     }
     rv <- transformPixelMatrix(rv,
-                               logisticTransform = logisticTransform,
-                               logisticTransformLocation = ltl,
+                               transformations = transformations,
+                               logisticTransformLocation = logisticTransformLocation,
                                logisticTransformScale = logisticTransformScale,
-                               gaussianBlur = gaussianBlur,
                                gaussianBlurSize = gaussianBlurSize,
                                gaussianBlurSigma = gaussianBlurSigma,
-                               unsharp = unsharp,
                                floodFillTolerance = floodFillTolerance)
    
     maxrv <- max(rv)
@@ -340,8 +349,8 @@ read_image<- function(file,
         }else{
             cc<-grDevices::contourLines(1:nr,1:nc,rv3,levels=ifelse(extreme,255,cutVal))
             cl <- unlist(lapply(cc,function(x)sum(sapply(2:length(x$x),
-                                                      function(i)LineLength(c(x$x[i],x$y[i]),
-                                                                            c(x$x[i-1],x$y[i-1]))))
+                                                         function(i)LineLength(c(x$x[i],x$y[i]),
+                                                                               c(x$x[i-1],x$y[i-1]))))
                                 ))
             ## cl <- unlist(lapply(cc,function(x)length(x$x)))
             cont <- do.call("cbind",cc[[which.max(cl)]][c("x","y")])
@@ -350,14 +359,12 @@ read_image<- function(file,
         attr(res[[i]],"Position") <- levels(km$cluster)[i]
         attr(res[[i]],"File") <- file
         attr(res[[i]],"NoiseFactor") <- noiseFactor
-        attr(res[[i]],"LogisticTransform") <- list(used = logisticTransform,
-                                                   location = ltl,
-                                                   scale = logisticTransformScale)
-        attr(res[[i]],"GaussianBlur") <- list(used = gaussianBlur & !unsharp,
-                                              size = gaussianBlurSize,
-                                              sigma = gaussianBlurSigma)
-        attr(res[[i]],"floodFillTolerance") <- floodFillTolerance
-        attr(res[[i]],"UnsharpMask") <- list(used = unsharp)
+        attr(res[[i]],"Transformation") <- list(transformations = transformations,
+                                                logisticTransformLocation = logisticTransformLocation,
+                                                logisticTransformScale = logisticTransformScale,
+                                                gaussianBlurSize = gaussianBlurSize,
+                                                gaussianBlurSigma = gaussianBlurSigma,
+                                                floodFillTolerance = floodFillTolerance)
         attr(res[[i]],"ImagePixels") <- c(nc,nr)
         attr(res[[i]],"Normalized") <- FALSE
         attr(res[[i]],"Flipped") <- c(FALSE,FALSE)
@@ -367,14 +374,12 @@ read_image<- function(file,
     }
     attr(res,"File") <- file
     attr(res,"NoiseFactor") <- noiseFactor
-    attr(res,"LogisticTransform") <- list(used = logisticTransform,
-                                          location = ltl,
-                                          scale = logisticTransformScale)
-    attr(res,"GaussianBlur") <- list(used = gaussianBlur & !unsharp,
-                                     size = gaussianBlurSize,
-                                     sigma = gaussianBlurSigma)
-    attr(res,"floodFillTolerance") <- floodFillTolerance
-    attr(res,"UnsharpMask") <- list(used = unsharp)
+    attr(res,"Transformation") <- list(transformations = transformations,
+                                            logisticTransformLocation = logisticTransformLocation,
+                                            logisticTransformScale = logisticTransformScale,
+                                            gaussianBlurSize = gaussianBlurSize,
+                                            gaussianBlurSigma = gaussianBlurSigma,
+                                            floodFillTolerance = floodFillTolerance)
     attr(res,"ImagePixels") <- c(nc,nr)
     class(res) <- "otolith_image"
     return(res)

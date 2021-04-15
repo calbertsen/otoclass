@@ -383,6 +383,27 @@ struct FS1_AR1 : OBSERVATION_DENSITY<Type> {
 };
 
 
+template<class Type>
+struct SPL_CATEGORICAL : OBSERVATION_DENSITY<Type> {
+  int Ncat;
+  vector<Type> knots;
+  
+  SPL_CATEGORICAL() : knots(0) {};
+  SPL_CATEGORICAL(int N,
+	  vector<Type> knots_) : Ncat(N), knots(knots_) {};
+
+  Type operator()(vector<Type> x, vector<Type> mu, vector<Type> scale){
+    // x.size() == 1
+    int xi = CppAD::Integer(x(0));
+    vector<Type> vv(Ncat-1);
+    vv.setZero();
+    for(int i = 0; i < vv.size(); ++i)
+      vv(i) = bcspline(Type(i), knots, (vector<Type>)mu.segment(1,mu.size()-1)) - mu(0);
+    vector<Type> logP = toLogProportion(vv);
+    return -logP(xi);
+  }
+};
+
 
 // template <class Type>
 // struct DistVec : vector<OBSERVATION_DENSITY<Type>* > {
@@ -496,7 +517,8 @@ namespace Model{
     SNP1,
     SNP2,
     SPL_AR1,
-    FS1_AR1
+    FS1_AR1,
+    SPL_CATEGORICAL
   };
 }
 
@@ -645,6 +667,7 @@ Type objective_function<Type>::operator() () {
   DATA_IMATRIX(identifyMatrix);
 
   DATA_VECTOR(knots);
+  DATA_INTEGER(Ncat);
   
   PARAMETER_ARRAY(mu);
   PARAMETER_MATRIX(commonMu);
@@ -692,6 +715,8 @@ Type objective_function<Type>::operator() () {
     nFeatures = betaLogScale.dim[1];
   }else if(modelType == Model::FS1_AR1){
     nFeatures = betaLogScale.dim[1];
+  }else if(modelType == Model::SPL_CATEGORICAL){
+    nFeatures = betaLogScale.dim[1];
   }
   
   // Transform lambda
@@ -734,7 +759,8 @@ Type objective_function<Type>::operator() () {
     matrix<Type> stmp(sigma.rows(),sigma.rows());
     stmp.setIdentity();
     if(modelType != Model::SPL_AR1 &&
-       modelType != Model::FS1_AR1){
+       modelType != Model::FS1_AR1 &&
+       modelType != Model::SPL_CATEGORICAL){
       if(stmp.cols() > 1){
 	stmp = UNSTRUCTURED_CORR((vector<Type>)corpar.col(k)).cov();
       }
@@ -804,6 +830,9 @@ Type objective_function<Type>::operator() () {
       REPORT(knots);
     }else if(modelType == Model::FS1_AR1){
       dist[i] = new FS1_AR1<Type>(Y.dim[0],(nFeatures-1)/2, exp(logSigma(0,i)), 1.0 / (1.0 + exp(-logSigma(1,i))));
+    }else if(modelType == Model::SPL_CATEGORICAL){
+      dist[i] = new SPL_CATEGORICAL<Type>(Ncat,knots);
+      REPORT(knots);
     }else{
       Rf_error("Model not implemented.");
     }
@@ -929,8 +958,8 @@ Type objective_function<Type>::operator() () {
       // P(C_i | S)
       for(int cc = 0; cc < G.cols(); ++cc){
 	if(!isNA(G(i,cc))){
-	matrix<Type> MvecUse = Mvec(cc).transpose() * Gconversion(cc);
-	ld2 += log(MvecUse(G(i,cc),j));
+	  matrix<Type> MvecUse = Mvec(cc).transpose() * Gconversion(cc);
+	  ld2 += log(MvecUse(G(i,cc),j));
 	}
       }
       // lp(j) = ld + log(th(j)) + log(Muse(j)) - log(NormalizationConstant);

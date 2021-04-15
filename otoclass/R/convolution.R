@@ -58,25 +58,38 @@ to01 <- function(x){
 edge_detect <- function(pic){
     k2 <- matrix(c(-1,-1,-1,-1,8,-1,-1,-1,-1),3,3)
     r <- convol(pic,k2)
-    return(r)
+    return(round(to01(r) * 255))
 }
 
 edge_detect2 <- function(pic){
     k2 <- matrix(c(1,0,-1,0,0,0,-1,0,1),3,3)
     r <- convol(pic,k2)
-    return(r)
+    return(round(to01(r) * 255))
 }
 
 edge_detect3 <- function(pic){
     k2 <- matrix(c(0,1,0,1,-4,1,0,1,0),3,3)
     r <- convol(pic,k2)
-    return(r)
+    return(round(to01(r) * 255))
 }
 
 
-sobel <- function(pic){    
+sobel_x <- function(pic){    
     k2 <- matrix(c(-1,-2,-1,0,0,0,1,2,1),3,3)
     r <- convol(pic,k2)
+    return(r)
+}
+
+sobel_y <- function(pic){    
+    k2 <- t(matrix(c(-1,-2,-1,0,0,0,1,2,1),3,3))
+    r <- convol(pic,k2)
+    return(r)
+}
+
+sobel <- function(pic){
+    r1 <- sobel_x(pic)
+    r2 <- sobel_y(pic)
+    r <- sqrt(r1^2 + r2^2)
     return(r)
 }
 

@@ -52,12 +52,13 @@ mlld <- function(## Data related
                  confusionMatrixList = NULL,
                  groupConversionList = list(),
                  confusionLevelTypes = rep("Known",ifelse(is.null(ncol(group)),1,ncol(group))),  ## Possible values: c("Known","Fixed","Estimate")
-                 observationType = c("MVMIX","SNP1","SNP2","SPL_AR1","FS1_AR1"),
+                 observationType = c("MVMIX","SNP1","SNP2","SPL_AR1","FS1_AR1","SPL_CATEGORICAL"),
                  forceMeanIncrease = FALSE,
                  ## na.pass = FALSE,
                  fixZeroGradient = TRUE,
                  SNP2dm = TRUE,
-                 SPLknots = plogis(seq(qlogis(1/(ncol(y)+1)),qlogis(ncol(y)/(ncol(y)+1)),len=7)),
+                 sameSNP2dm = TRUE,
+                 SPLknots = NULL,
                  Nefd = 5,
                  lower = list(UlogSd = -10,
                               UThetalogSd = -10,
@@ -68,8 +69,18 @@ mlld <- function(## Data related
     
     cl <- match.call()
     observationType <- match.argInt(observationType) - 1
-
+ 
 ##### Checks #####
+    if(observationType == 5){
+        if(!is.factor(y)){
+            message("y was changed to a factor")
+            y <- factor(y)            
+        }
+        Ncat <- nlevels(y)
+        y <- as.integer(y) - 1
+    }else{
+        Ncat <- 0
+    }
     if(observationType != 2){
         if(!is.matrix(y))
             if(is.vector(y)){
@@ -84,13 +95,26 @@ mlld <- function(## Data related
         yUse <- y
     }
     nObs <- ifelse(observationType==2, dim(yUse)[3L], ncol(yUse))
+
+    if(is.null(SPLknots)){
+        if(observationType == 5){
+            SPLknots <- plogis(seq(qlogis(1/(Ncat+1)),qlogis(Ncat/(Ncat+1)),len=5))
+        }else{
+            SPLknots <- plogis(seq(qlogis(1/(ncol(y)+1)),qlogis(ncol(y)/(ncol(y)+1)),len=5))
+        }
+    }else if(observationType == 5){
+        if(any(SPLknots < 0 | SPLknots > Ncat))
+            warning("Spline knots outside category range")
+    }
     ##nFeat <- ifelse(observationType==2, dim(yUse)[2L], nrow(yUse))
     nFeat <- switch(as.character(observationType),
                     "2" = dim(yUse)[2L],
                     "3" = length(SPLknots)+1,
                     "4" = Nefd * 2 + 1,
+                    "5" = length(SPLknots)+1,
                     nrow(yUse))
 
+    
     SNP2dm <- rep(SNP2dm,length.out = nFeat)
                        
     if(!is.factor(group) && !is.data.frame(group)){
@@ -437,15 +461,18 @@ mlld <- function(## Data related
                 ## dispersionGroup_pred = factor(),
                 increaseFirstCoordinate = increaseFirstCoordinate,
                 identifyMatrix = identifyMatrix,
-                knots = SPLknots
+                knots = SPLknots,
+                Ncat = Ncat
                 )
 
 ##### Parameters for TMB #####
     n <- nFeat ## nrow(dat$Y)
     ## par list
     mndim <- c(nrow(dat$X), nFeat * ifelse(observationType==2,nrow(dat$Y)-1,1), dat$Gnlevels[1])
-    mn <- array(rnorm(prod(mndim),0,0.001), dim = mndim) ## 
-    if(observationType == 2){ ## Better starting values for SNP2
+    mn <- array(rnorm(prod(mndim),0,0.001), dim = mndim) ##
+    if(observationType == 0){ ## Better starting values for MVMIX
+
+    }else if(observationType == 2){ ## Better starting values for SNP2
         sv <- sapply(seq_len(dim(dat$Y)[2]), function(i)
             unlist(lapply(split(as.data.frame(t(dat$Y[,i,])),factor(dat$G[,1]+1,seq_len(dat$Gnlevels[1]))),function(x){ v <- colSums(as.matrix(x)); qlogis(squeeze(v[1]/sum(v))) }))
             )        
@@ -458,16 +485,28 @@ mlld <- function(## Data related
                 warning("Mean values for the first feature does not apear to increase with groups.")
             mn[1,1,] <- unname(c(sv[1,1], log(diff(sv[,1]))))
         }
+    }else if(observationType == 3){ ## Better starting values for SPL_AR1
+        cmy <- rowMeans(y)
+        yCDF <- ecdf(cmy)
+        sv <- sapply(split(cmy, factor(dat$G[,1]+1,seq_len(dat$Gnlevels[1]))),mean)
+        mn[1,1,][which(!is.nan(sv))] <- unname(sv[which(!is.nan(sv))])
+        if(forceMeanIncrease){
+            isv <- !is.nan(sv)
+            sv <- approx(x = yCDF(c(min(cmy),sv[isv],max(cmy))),
+                         y = c(min(cmy),sv[isv],max(cmy)),
+                         xout = head(tail(seq(0, 1, length.out = dat$Gnlevels[1]+2),-1), -1))$y        
+            mn[1,1,] <- unname(c(sv[1], log(diff(sv))))
+        }
     }
     ##mn <- sapply(levels(dat$G),function(i)apply(dat$X[,dat$G==i,drop=FALSE],1,mean))
-    if(independent || observationType %in% c(1,2,3,4)){
+    if(independent || observationType %in% c(1,2,3,4,5)){
         corcalc <- 0
     }else{
         ##corcalc <- t(chol(stats::cor(t(dat$Y))))[lower.tri(t(chol(stats::cor(t(dat$Y)))),diag = FALSE)]
         corcalc <- 0
     }
 
-    if(observationType %in% c(1,2)){
+    if(observationType %in% c(1,2,5)){
         logSd <- numeric(0)
     }else if(observationType %in% c(3,4)){
         logSd <- numeric(2)
@@ -484,10 +523,10 @@ mlld <- function(## Data related
         par <- list(mu = mn,
                     commonMu = matrix(0,nrow(dat$XCom),nFeat * ifelse(observationType==2,nrow(dat$Y)-1,1)),
                     logSigma = matrix(logSd,
-                                      ifelse(observationType%in%c(1,2),0,ifelse(observationType%in%c(3,4),2,n)),
+                                      ifelse(observationType%in%c(1,2,5),0,ifelse(observationType%in%c(3,4),2,n)),
                                       dat$Gnlevels[1]),
                     corpar = matrix(corcalc,
-                                    ifelse(observationType%in%c(1,2,3,4),0,(n*n-n)/2),
+                                    ifelse(observationType%in%c(1,2,3,4,5),0,(n*n-n)/2),
                                     dat$Gnlevels[1]),
                     U = U,
                     Ucor = Ucor,
@@ -558,11 +597,13 @@ mlld <- function(## Data related
     }
     if(nrow(par$betaLogScale) > 0){
             blsMap <- array(1:length(par$betaLogScale),dim = dim(par$betaLogScale))
-        if(observationType %in% c(1,3,4)){
+        if(observationType %in% c(1,3,4,5)){
             blsMap[] <- NA
         }else if(observationType == 0){
             blsMap[1,,] <- NA
         }else if(observationType == 2){ # For observationType == 2, it is used for dirichlet multinomial
+            if(sameSNP2dm)
+                blsMap[,SNP2dm,] <- 1
             blsMap[,!SNP2dm,] <- NA
             par$betaLogScale[,!SNP2dm,] <- Inf
         }                        
@@ -637,9 +678,9 @@ mlld <- function(## Data related
     commonMuNames <- list(rownames(dat$XCom),
                           colnames(y))
 
- 
+    opt$he <- optimHess(opt$par, obj$fn, obj$gr)
     if(doSdreport){
-        sdr <- TMB::sdreport(obj,opt$par, getReportCovariance = getReportCovariance)
+        sdr <- TMB::sdreport(obj,opt$par, solve(opt$he), getReportCovariance = getReportCovariance)
     }else{
         sdr <- NULL
     }

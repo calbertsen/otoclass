@@ -10,15 +10,13 @@ read_image(
   onlyOne = FALSE,
   minPixelDiff = 0.05 * min(nc, nr),
   extreme = TRUE,
-  floodFillTolerance = 0,
+  floodFillTolerance = 0.1,
   borderBasedCutOff = FALSE,
-  logisticTransform = FALSE,
+  transformations = character(0),
   logisticTransformLocation = c("mean", "median", "borderMean", "borderMedian"),
   logisticTransformScale = 1,
-  gaussianBlur = FALSE,
   gaussianBlurSize = round(0.02 * min(nc, nr)),
   gaussianBlurSigma = gaussianBlurSize/10,
-  unsharp = FALSE,
   pixelwise = FALSE,
   assignSinglesByPosition = TRUE,
   minCountScale = 0,
@@ -40,19 +38,15 @@ read_image(
 
 \item{borderBasedCutOff}{Use a border based cut off?}
 
-\item{logisticTransform}{Do logistic transformation of image?}
+\item{transformations}{Vector of image transformations: logistic, gaussianBlur, unsharp, floodFill}
 
 \item{logisticTransformLocation}{Location parameter for logistic transformation}
 
 \item{logisticTransformScale}{Scale parameter for logistic transformation}
 
-\item{gaussianBlur}{Do Gaussian blur of image?}
-
 \item{gaussianBlurSize}{Size (n x n) for Gaussian blur kernel}
 
 \item{gaussianBlurSigma}{Variance parameter of Gaussian distribution used to blur}
-
-\item{unsharp}{Do unsharp mask of image using the Gaussian blur arguments?}
 
 \item{pixelwise}{Boolean value. If TRUE, a pixel-wise algorithm is used to extract contours; otherwise, \code{grDevices::contourLines} is used.}
 

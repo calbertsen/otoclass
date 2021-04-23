@@ -1,55 +1,5 @@
 
 
-getProportion <- function(f, data, indx){
-    if(missing(indx))
-        indx <- seq_along(f$muNames[[3]])
-    if(missing(data))
-        data <- f$data
-    if(is.null(f$sdr)){
-        betaTheta <- as.vector(f$pl$betaTheta)
-        Sigm <- matrix(NA_real_,length(betaTheta),length(betaTheta))
-    }else{       
-        ssdr <- summary(f$sdr)
-        betaTheta <- unname(ssdr[rownames(ssdr)=="betaTheta",1])
-        Sigm <- f$sdr$cov.fixed[rownames(f$sdr$cov.fixed) == "betaTheta",colnames(f$sdr$cov.fixed) == "betaTheta"]
-    }
-    X <- model.matrix(f$termsTheta,data = data, xlev=f$xlevelsTheta)
-    fn <- function(p) {
-        P <- matrix(p,nrow(f$pl$betaTheta))
-        x <- cbind(X %*% P,0)
-        qlogis(apply(x, 1, function(y) exp(y) / sum(exp(y)))[indx,])
-    }
-    rEst <- unname(fn(betaTheta))
-    g <- numDeriv::jacobian(fn, betaTheta)
-    rVar <- (g %*% Sigm %*% t(g))
-    rSd <- sqrt(diag(rVar))
-    dd <- list(Estimate = plogis(rEst),
-               CIlow = plogis(rEst - 2 * rSd),
-               CIhigh = plogis(rEst + 2 * rSd))
-    dd <- lapply(dd, function(xx){
-        if(is.matrix(xx))
-            return(xx)
-        return(matrix(xx, length(f$muNames[[3]]), nrow(data)))
-    })
-    attr(dd,"rEst") <- rEst
-    attr(dd,"rVar") <- rVar
-    rownames(dd[[1]]) <- rownames(dd[[2]]) <- rownames(dd[[3]]) <- f$muNames[[3]]
-    colnames(dd[[1]]) <- colnames(dd[[2]]) <- colnames(dd[[3]]) <- rownames(data)
-    dd <- lapply(dd, function(xx) xx[indx,,drop=FALSE])
-    if(length(indx) == 1 || nrow(data) == 1){
-        dnm <- paste(rownames(dd[[1]])[row(dd[[1]])], colnames(dd[[1]])[col(dd[[1]])], sep = "_")
-        dd <- as.data.frame(lapply(dd,as.vector))
-        rownames(dd) <- dnm
-    }
-    dd
-}
-
-getGroupDataFrame <- function(x, ...){
-    UseMethod("getGroupDataFrame")
-}
-getGroupDataFrame.mlld <- function(x,...){    
-    as.data.frame(lapply(seq_along(x$groupLevels), function(i) factor(x$groupLevels[[i]][x$group+1],x$groupLevels[[i]])))
-}
 
 calculateVarBetweenGroups <- function(x, ...){
     UseMethod("calculateVarBetweenGroups")

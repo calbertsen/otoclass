@@ -1,3 +1,189 @@
+getProportion <- function(f, data, indx){
+    if(missing(indx))
+        indx <- seq_along(f$muNames[[3]])
+    if(missing(data))
+        data <- f$data
+    if(is.null(f$sdr)){
+        betaTheta <- as.vector(f$pl$betaTheta)
+        Sigm <- matrix(NA_real_,length(betaTheta),length(betaTheta))
+    }else{       
+        ssdr <- summary(f$sdr)
+        betaTheta <- unname(ssdr[rownames(ssdr)=="betaTheta",1])
+        Sigm <- f$sdr$cov.fixed[rownames(f$sdr$cov.fixed) == "betaTheta",colnames(f$sdr$cov.fixed) == "betaTheta"]
+    }
+    X <- model.matrix(f$termsTheta,data = data, xlev=f$xlevelsTheta)
+    fn <- function(p) {
+        P <- matrix(p,nrow(f$pl$betaTheta))
+        x <- cbind(X %*% P,0)
+        qlogis(apply(x, 1, function(y) exp(y) / sum(exp(y)))[indx,])
+    }
+    rEst <- unname(fn(betaTheta))
+    g <- numDeriv::jacobian(fn, betaTheta)
+    rVar <- (g %*% Sigm %*% t(g))
+    rSd <- sqrt(diag(rVar))
+    dd <- list(Estimate = plogis(rEst),
+               CIlow = plogis(rEst - 2 * rSd),
+               CIhigh = plogis(rEst + 2 * rSd))
+    dd <- lapply(dd, function(xx){
+        if(is.matrix(xx))
+            return(xx)
+        return(matrix(xx, length(f$muNames[[3]]), nrow(data)))
+    })
+    attr(dd,"rEst") <- rEst
+    attr(dd,"rVar") <- rVar
+    rownames(dd[[1]]) <- rownames(dd[[2]]) <- rownames(dd[[3]]) <- f$muNames[[3]]
+    colnames(dd[[1]]) <- colnames(dd[[2]]) <- colnames(dd[[3]]) <- rownames(data)
+    dd <- lapply(dd, function(xx) xx[indx,,drop=FALSE])
+    if(length(indx) == 1 || nrow(data) == 1){
+        dnm <- paste(rownames(dd[[1]])[row(dd[[1]])], colnames(dd[[1]])[col(dd[[1]])], sep = "_")
+        dd <- as.data.frame(lapply(dd,as.vector))
+        rownames(dd) <- dnm
+    }
+    dd
+}
+
+##' Calculate group proportions for a data frame of covariates
+##'
+##' @param f 
+##' @param data 
+##' @return 
+##' @author Christoffer Moesgaard Albertsen
+##' @export
+getGroupProportion <- function(f, data){
+    UseMethod("getGroupProportion")
+}
+
+
+##' @rdname getGroupProportion
+##' @method getGroupProportion mlld
+##' @export
+getGroupProportion.mlld <- function(f, data){
+    if(missing(data))
+        data <- f$data
+    tmb_data <- f$tmb_data
+    tmb_par <- f$pl
+    tmb_map <- f$tmb_map
+    tmb_random <- f$tmb_random
+    tmb_profile <- f$tmb_profile
+
+    tmb_data$XTheta_pred <- Matrix::sparse.model.matrix(f$termsTheta,
+                                                   data = data,
+                                                   transpose = TRUE,
+                                                   row.names = FALSE,
+                                                   xlev = f$xlevelsTheta)
+    if(inherits(tmb_data$XTheta_pred,"dgCMatrix"))
+        tmb_data$XTheta_pred <- as(tmb_data$XTheta_pred,"dgTMatrix")    
+
+    obj <- TMB::MakeADFun(data = tmb_data,
+                     parameters = tmb_par,
+                     map = tmb_map,
+                     random = tmb_random,
+                     profile = tmb_profile,
+                     silent = TRUE,
+                     DLL = "otoclass")
+    rp <- obj$report()
+    sdr <- TMB::sdreport(obj, obj$par, f$opt$he)
+    ssdr <- TMB::summary.sdreport(sdr)
+    ##
+    grpP <- ssdr[rownames(ssdr) == "GROUP_logitprobability",]
+    fit_P <- plogis(do.call("structure",c(list(.Data=unname(grpP[,1])), attributes(rp$GROUP_logitprobability))))
+    CIlow_P <- plogis(do.call("structure",c(list(.Data=unname(grpP[,1] - 2 * grpP[,2])), attributes(rp$GROUP_logitprobability))))
+    CIhigh_P <- plogis(do.call("structure",c(list(.Data=unname(grpP[,1] + 2 * grpP[,2])), attributes(rp$GROUP_logitprobability))))
+    dimnames(fit_P) <- dimnames(CIlow_P) <- dimnames(CIhigh_P) <- list(f$muNames[[3]],seq_len(nrow(data)))
+
+    list(fit = fit_P,
+         CI_low = CIlow_P,
+         CI_high = CIhigh_P)
+                    
+}
+
+
+
+##' Calculate group means for a data frame of covariates
+##'
+##' @param f 
+##' @param data 
+##' @return 
+##' @author Christoffer Moesgaard Albertsen
+##' @export
+getGroupMeans <- function(f, data){
+    UseMethod("getGroupMeans")
+}
+
+
+##' @rdname getGroupMeans
+##' @method getGroupMeans mlld
+##' @export
+getGroupMeans.mlld <- function(f, data){
+    if(missing(data))
+        data <- f$data
+    tmb_data <- f$tmb_data
+    tmb_par <- f$pl
+    tmb_map <- f$tmb_map
+    tmb_random <- f$tmb_random
+    tmb_profile <- f$tmb_profile
+
+    tmb_data$X_pred <- Matrix::sparse.model.matrix(f$terms,
+                                                   data = data,
+                                                   transpose = TRUE,
+                                                   row.names = FALSE,
+                                                   xlev = f$xlevels)
+    if(inherits(tmb_data$X_pred,"dgCMatrix"))
+        tmb_data$X_pred <- as(tmb_data$X_pred,"dgTMatrix")    
+
+    tmb_data$XCom_pred <- Matrix::sparse.model.matrix(f$termsCommon,
+                                                      data = data,
+                                                      transpose = TRUE,
+                                                      row.names = FALSE,
+                                                      xlev = f$xlevelsCommon)
+    if(inherits(tmb_data$XCom_pred,"dgCMatrix"))
+        tmb_data$XCom_pred <- as(tmb_data$XCom_pred,"dgTMatrix")    
+
+    obj <- TMB::MakeADFun(data = tmb_data,
+                     parameters = tmb_par,
+                     map = tmb_map,
+                     random = tmb_random,
+                     profile = tmb_profile,
+                     silent = TRUE,
+                     DLL = "otoclass")
+    rp <- obj$report()
+    sdr <- TMB::sdreport(obj, obj$par, f$opt$he)
+    ssdr <- TMB::summary.sdreport(sdr)
+    ##
+    grpMean <- ssdr[rownames(ssdr) == "GROUP_mean_group",]
+    fit_mean <- do.call("structure",c(list(.Data=unname(grpMean[,1])), attributes(rp$GROUP_mean_group)))
+    dimnames(fit_mean) <- list(f$muNames[[2]],seq_len(nrow(data)),f$muNames[[3]])
+    sd_mean <- do.call("structure",c(list(.Data=unname(grpMean[,2])), attributes(rp$GROUP_mean_group)))
+    dimnames(sd_mean) <- list(f$muNames[[2]],seq_len(nrow(data)),f$muNames[[3]])
+    ##
+    grpCommon <- ssdr[rownames(ssdr) == "GROUP_mean_common",]
+    fit_com <- do.call("structure",c(list(.Data=unname(grpCommon[,1])), attributes(rp$GROUP_mean_common)))
+    dimnames(fit_com) <- list(f$muNames[[2]],seq_len(nrow(data)))
+    sd_com <- do.call("structure",c(list(.Data=unname(grpCommon[,2])), attributes(rp$GROUP_mean_common)))
+    dimnames(sd_com) <- list(f$muNames[[2]],seq_len(nrow(data)))
+    ##
+    grpTotal <- ssdr[rownames(ssdr) == "GROUP_mean_total",]
+    fit_total <- do.call("structure",c(list(.Data=unname(grpTotal[,1])), attributes(rp$GROUP_mean_total)))
+    dimnames(fit_total) <- list(f$muNames[[2]],seq_len(nrow(data)),f$muNames[[3]])
+    sd_total <- do.call("structure",c(list(.Data=unname(grpTotal[,2])), attributes(rp$GROUP_mean_total)))
+    dimnames(sd_total) <- list(f$muNames[[2]],seq_len(nrow(data)),f$muNames[[3]])
+    ##
+    list(fit = list(group = fit_mean,
+                    common = fit_com,
+                    total = fit_total),
+         se.fit = list(group = sd_mean,
+                    common = sd_com,
+                    total = sd_total))
+                    
+}
+
+
+getGroupDataFrame <- function(x, ...){
+    UseMethod("getGroupDataFrame")
+}
+getGroupDataFrame.mlld <- function(x,...){    
+    as.data.frame(lapply(seq_along(x$groupLevels), function(i) factor(x$groupLevels[[i]][x$group+1],x$groupLevels[[i]])))
+}
 
 
 ##' @export
@@ -87,7 +273,7 @@ predict.mlld <- function(x, y = NULL, data = NULL, group = NULL, proportionGroup
             if(all(is.na(group)) || !isTRUE(all.equal(groupLevels, x$groupLevels)))
                 warning("group does not match the fitted group.")
         }
-        return(dat)
+        ##return(dat)
         obj <- TMB::MakeADFun(dat,x$pl,x$tmb_map,
                               silent = x$silent, random = x$tmb_random,
                               DLL = "otoclass")

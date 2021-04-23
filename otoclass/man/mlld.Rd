@@ -28,7 +28,7 @@ mlld(
   drop.unused.levels = TRUE,
   onlyObj = FALSE,
   doSdreport = TRUE,
-  getReportCovariance = FALSE,
+  getReportCovariance = TRUE,
   equalVariance = TRUE,
   confusionMatrixList = NULL,
   groupConversionList = list(),
@@ -40,8 +40,8 @@ mlld(
   sameSNP2dm = TRUE,
   SPLknots = NULL,
   Nefd = 5,
-  lower = list(UlogSd = -10, UThetalogSd = -10, UComlogSd = -10, betaTheta = -10),
-  upper = list(betaTheta = 10),
+  lower = list(),
+  upper = list(),
   ...
 )
 }

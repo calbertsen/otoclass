@@ -3,6 +3,10 @@ squeeze <- function(u, eps = .Machine$double.eps){
 }
 
 
+svd_solve <- function(x){
+    ss <- svd(x)
+    ss$v %*% diag(1/ss$d, length(ss$d), length(ss$d)) %*% t(ss$u)
+}
 ##' Maximum likelihood linear discrimination
 ##'
 ##' @param proportionGroup 
@@ -47,7 +51,7 @@ mlld <- function(## Data related
                  drop.unused.levels = TRUE,
                  onlyObj = FALSE,
                  doSdreport = TRUE,
-                 getReportCovariance = FALSE,
+                 getReportCovariance = TRUE,
                  equalVariance = TRUE,
                  confusionMatrixList = NULL,
                  groupConversionList = list(),
@@ -60,11 +64,16 @@ mlld <- function(## Data related
                  sameSNP2dm = TRUE,
                  SPLknots = NULL,
                  Nefd = 5,
-                 lower = list(UlogSd = -10,
-                              UThetalogSd = -10,
-                              UComlogSd = -10,
-                              betaTheta = -10),
-                 upper = list(betaTheta = 10),
+                 ## lower = list(UlogSd = -10,
+                 ##              UThetalogSd = -10,
+                 ##              UComlogSd = -10,
+                 ##              betaTheta = -10,
+                 ##              tmixpIn = -10),
+                 ## upper = list(betaTheta = 10,
+                 ##              tmixpIn = 10),
+                 lower = list(),
+                 upper = list(),
+                 guessStartingValues = TRUE,
                  ...){
     
     cl <- match.call()
@@ -131,6 +140,8 @@ mlld <- function(## Data related
         group <- data.frame(G = group)
     }
 
+    equalVariance <- rep(equalVariance, length.out = 3)
+    
     groupLevels <- lapply(group, levels)
     groupNlevels <- sapply(group, nlevels)
     group <- do.call("cbind",lapply(group, function(x) as.integer(x) - 1))
@@ -223,8 +234,8 @@ mlld <- function(## Data related
                                      transpose = TRUE,
                                      row.names = FALSE,
                                      drop.unused.levels = drop.unused.levels)
-    if(inherits(X,"dgCMatrix"))
-        X <- as(X,"dgTMatrix")    
+    ## if(!inherits(X,"dgTMatrix"))
+    X <- as(X,"dgTMatrix")    
 
     if(is.null(lme4::findbars(formula))){
         Z <- list()
@@ -270,8 +281,8 @@ mlld <- function(## Data related
                                         transpose = TRUE,
                                         row.names = FALSE,
                                         drop.unused.levels = drop.unused.levels)
-    if(inherits(XCom,"dgCMatrix"))
-        XCom <- as(XCom,"dgTMatrix")
+    ## if(!inherits(XCom,"dgTMatrix"))
+    XCom <- as(XCom,"dgTMatrix")
 
     if(is.null(lme4::findbars(formulaCommon))){
         ZCom <- list()
@@ -314,8 +325,8 @@ mlld <- function(## Data related
                                         transpose = TRUE,
                                         row.names = FALSE,
                                         drop.unused.levels = drop.unused.levels)
-    if(inherits(XLogScale,"dgCMatrix"))
-        XLogScale <- as(XLogScale,"dgTMatrix")
+    ## if(!inherits(XLogScale,"dgTMatrix"))
+    XLogScale <- as(XLogScale,"dgTMatrix")
 
     if(!is.null(lme4::findbars(formulaLogScale)))
         warning("formulaLogScale does not allow random effets. Random effect terms were removed.")
@@ -328,8 +339,8 @@ mlld <- function(## Data related
                                         transpose = TRUE,
                                         row.names = FALSE,
                                         drop.unused.levels = drop.unused.levels)
-    if(inherits(XTheta,"dgCMatrix"))
-        XTheta <- as(XTheta,"dgTMatrix")
+    ## if(!inherits(XTheta,"dgTMatrix"))
+    XTheta <- as(XTheta,"dgTMatrix")
 
     if(is.null(lme4::findbars(formulaProportion))){
         ZT <- list()
@@ -470,32 +481,34 @@ mlld <- function(## Data related
     ## par list
     mndim <- c(nrow(dat$X), nFeat * ifelse(observationType==2,nrow(dat$Y)-1,1), dat$Gnlevels[1])
     mn <- array(rnorm(prod(mndim),0,0.001), dim = mndim) ##
-    if(observationType == 0){ ## Better starting values for MVMIX
+    if(guessStartingValues){
+        if(observationType == 0){ ## Better starting values for MVMIX
 
-    }else if(observationType == 2){ ## Better starting values for SNP2
-        sv <- sapply(seq_len(dim(dat$Y)[2]), function(i)
-            unlist(lapply(split(as.data.frame(t(dat$Y[,i,])),factor(dat$G[,1]+1,seq_len(dat$Gnlevels[1]))),function(x){ v <- colSums(as.matrix(x)); qlogis(squeeze(v[1]/sum(v))) }))
-            )        
-        mn[1,,][which(!is.nan(sv))] <- unname(sv[which(!is.nan(sv))])
-        if(forceMeanIncrease){
-            isv <- !is.nan(sv[,1])
-            sv[,1] <- approx(x = c(0,seq_len(dat$Gnlevels[1])[isv],dat$Gnlevels[1]+1),
-                             y = c(-10,sv[isv,1],10), xout = seq_len(dat$Gnlevels[1]))$y
-            if(!all(diff(sv[,1]) > 0))
-                warning("Mean values for the first feature does not apear to increase with groups.")
-            mn[1,1,] <- unname(c(sv[1,1], log(diff(sv[,1]))))
-        }
-    }else if(observationType == 3){ ## Better starting values for SPL_AR1
-        cmy <- rowMeans(y)
-        yCDF <- ecdf(cmy)
-        sv <- sapply(split(cmy, factor(dat$G[,1]+1,seq_len(dat$Gnlevels[1]))),mean)
-        mn[1,1,][which(!is.nan(sv))] <- unname(sv[which(!is.nan(sv))])
-        if(forceMeanIncrease){
-            isv <- !is.nan(sv)
-            sv <- approx(x = yCDF(c(min(cmy),sv[isv],max(cmy))),
-                         y = c(min(cmy),sv[isv],max(cmy)),
-                         xout = head(tail(seq(0, 1, length.out = dat$Gnlevels[1]+2),-1), -1))$y        
-            mn[1,1,] <- unname(c(sv[1], log(diff(sv))))
+        }else if(observationType == 2){ ## Better starting values for SNP2
+            sv <- sapply(seq_len(dim(dat$Y)[2]), function(i)
+                unlist(lapply(split(as.data.frame(t(dat$Y[,i,])),factor(dat$G[,1]+1,seq_len(dat$Gnlevels[1]))),function(x){ v <- colSums(as.matrix(x)); qlogis(squeeze(v[1]/sum(v))) }))
+                )        
+            mn[1,,][which(!is.nan(sv))] <- unname(sv[which(!is.nan(sv))])
+            if(forceMeanIncrease){
+                isv <- !is.nan(sv[,1])
+                sv[,1] <- approx(x = c(0,seq_len(dat$Gnlevels[1])[isv],dat$Gnlevels[1]+1),
+                                 y = c(-10,sv[isv,1],10), xout = seq_len(dat$Gnlevels[1]))$y
+                if(!all(diff(sv[,1]) > 0))
+                    warning("Mean values for the first feature does not apear to increase with groups.")
+                mn[1,1,] <- unname(c(sv[1,1], log(diff(sv[,1]))))
+            }
+        }else if(observationType == 3){ ## Better starting values for SPL_AR1
+            cmy <- rowMeans(y, na.rm = TRUE)
+            yCDF <- ecdf(cmy)
+            sv <- sapply(split(cmy, factor(dat$G[,1]+1,seq_len(dat$Gnlevels[1]))),mean)
+            mn[1,1,][which(!is.nan(sv))] <- unname(sv[which(!is.nan(sv))])
+            if(forceMeanIncrease){
+                isv <- !is.nan(sv)
+                sv <- approx(x = yCDF(c(min(cmy),sv[isv],max(cmy))),
+                             y = c(min(cmy),sv[isv],max(cmy)),
+                             xout = head(tail(seq(0, 1, length.out = dat$Gnlevels[1]+2),-1), -1))$y        
+                mn[1,1,] <- unname(c(sv[1], log(diff(sv))))
+            }
         }
     }
     ##mn <- sapply(levels(dat$G),function(i)apply(dat$X[,dat$G==i,drop=FALSE],1,mean))
@@ -515,38 +528,46 @@ mlld <- function(## Data related
     }
     
     
+    par <- list(mu = mn,
+                commonMu = matrix(0,nrow(dat$XCom),nFeat * ifelse(observationType==2,nrow(dat$Y)-1,1)),
+                logSigma = matrix(logSd,
+                                  ifelse(observationType%in%c(1,2,5),0,ifelse(observationType%in%c(3,4),2,n)),
+                                  dat$Gnlevels[1]),
+                corpar = matrix(corcalc,
+                                ifelse(observationType%in%c(1,2,3,4,5),0,(n*n-n)/2),
+                                dat$Gnlevels[1]),
+                U = U,
+                Ucor = Ucor,
+                UlogSd = UlogSd,
+                UCom = UC,
+                UComcor = UCcor,
+                UComlogSd = UClogSd,
+                UTheta = UT,
+                UThetacor = UTcor,
+                UThetalogSd = UTlogSd,
+                logLambda = rep(log(lambda),length.out = 2),
+                betaLogScale = array(0, dim = c(nrow(dat$XLogScale), nFeat, Ngroups)),
+                betaTheta = matrix(0, nrow(dat$XTheta), Ngroups-1),
+                ## thetaIn = matrix(0.0,groupNlevels[1]-1,
+                ##                  nlevels(proportionGroup)),
+                MIn = MInCMOE,
+                tmixpIn = matrix(qlogis(tMixture+0.01*as.numeric(estimateTMix)), n, dat$Gnlevels[1]),
+                logDf = matrix(log(tDf), n, dat$Gnlevels[1])
+                )
+
     if(!is.null(cl$parlist)){
-        par <- eval(cl$parlist)
+        parIn <- eval(cl$parlist)
         if(!is.null(cl$lambda))
-            par$logLambda <- log(lambda)
-    }else{
-        par <- list(mu = mn,
-                    commonMu = matrix(0,nrow(dat$XCom),nFeat * ifelse(observationType==2,nrow(dat$Y)-1,1)),
-                    logSigma = matrix(logSd,
-                                      ifelse(observationType%in%c(1,2,5),0,ifelse(observationType%in%c(3,4),2,n)),
-                                      dat$Gnlevels[1]),
-                    corpar = matrix(corcalc,
-                                    ifelse(observationType%in%c(1,2,3,4,5),0,(n*n-n)/2),
-                                    dat$Gnlevels[1]),
-                    U = U,
-                    Ucor = Ucor,
-                    UlogSd = UlogSd,
-                    UCom = UC,
-                    UComcor = UCcor,
-                    UComlogSd = UClogSd,
-                    UTheta = UT,
-                    UThetacor = UTcor,
-                    UThetalogSd = UTlogSd,
-                    logLambda = rep(log(lambda),length.out = 2),
-                    betaLogScale = array(0, dim = c(nrow(dat$XLogScale), nFeat, Ngroups)),
-                    betaTheta = matrix(0, nrow(dat$XTheta), Ngroups-1),
-                    ## thetaIn = matrix(0.0,groupNlevels[1]-1,
-                    ##                  nlevels(proportionGroup)),
-                    MIn = MInCMOE,
-                    tmixpIn = matrix(qlogis(tMixture+0.01*as.numeric(estimateTMix)), n, dat$Gnlevels[1]),
-                    logDf = matrix(log(tDf), n, dat$Gnlevels[1])
-                    )
+            parIn$logLambda <- log(lambda)
+        for(nn in intersect(names(parIn), names(par)))
+            if(class(parIn[[nn]]) == class(par[[nn]]) &&
+               length(parIn[[nn]]) == length(par[[nn]])){
+                par[[nn]][] <- parIn[[nn]][]
+            }else{
+                warning(sprintf("Wrong class or dimension in starting values %s",nn))
+            }
     }
+
     
     np <- Reduce("+",lapply(par[!(names(par) %in% c("U","UCom","UTheta"))],length))
 
@@ -555,23 +576,31 @@ mlld <- function(## Data related
     ## variance parameter map
     if(independent){
         corparMap <- factor(rep(NA,length(par$corpar)))
-    }else if(equalVariance){
+    }else if(equalVariance[2]){
         corparMap <- factor(row(par$corpar))
     }else{
         corparMap <- factor(rep(1:length(par$corpar),length = length(par$corpar)))
     }
-    if(equalVariance){
+    if(equalVariance[1]){
         sigmaMap <- factor(row(par$logSigma))
-        tMap <- factor(row(par$tmixpIn))
     }else{
         sigmaMap <- factor(1:length(par$logSigma))
+    }
+    if(equalVariance[3]){
+        tMap <- factor(row(par$tmixpIn))
+    }else{
         tMap <- factor(1:length(par$tmixpIn))
     }
 
     tMixMap <- tMap
+    if(sameTMix)
+        tMixMap <- factor(rep(1,length(tMixMap)))
     if(!estimateTMix)
         tMixMap[] <- NA
+    
     tDfMap <- tMap
+    if(sameTDf)
+        tDfMap <-  factor(rep(1,length(tDfMap)))
     if(!estimateTDf)
         tDfMap[] <- NA
 
@@ -679,11 +708,10 @@ mlld <- function(## Data related
                           colnames(y))
 
     opt$he <- optimHess(opt$par, obj$fn, obj$gr)
-    if(doSdreport){
-        sdr <- TMB::sdreport(obj,opt$par, solve(opt$he), getReportCovariance = getReportCovariance)
-    }else{
-        sdr <- NULL
-    }
+    colnames(opt$he) <- rownames(opt$he) <- names(opt$par)
+    sdr <- NULL
+    if(doSdreport)
+        try({sdr <- TMB::sdreport(obj,opt$par, opt$he, getReportCovariance = getReportCovariance)})
 
     xlevels <- .getXlevels(terms(mf), mf)
     xlevelsCommon <- .getXlevels(terms(mfCommon), mfCommon)
@@ -731,7 +759,8 @@ mlld <- function(## Data related
                 
                 tmb_data = obj$env$data,
                 tmb_map = map,
-                tmb_random = rnd,
+                tmb_profile = rnd,
+                tmb_random = RE,
 
                 identifyMatrix = identifyMatrix,
                                 
@@ -750,7 +779,7 @@ mlld <- function(## Data related
 
 ##' @export
 print.mlld <- function(x, ...){
-    print(x$opt)
+    print(x$opt[setdiff(names(x$opt),"he")])
 }
     
 

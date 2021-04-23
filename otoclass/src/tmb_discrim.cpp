@@ -339,9 +339,16 @@ struct SPL_AR1 : OBSERVATION_DENSITY<Type> {
 
   Type operator()(vector<Type> x, vector<Type> mu, vector<Type> scale){
     vector<Type> r(x.size());
-    for(int i = 0; i < r.size(); ++i)
+    int i0 = 0;
+    int i1 = x.size() - 1;
+    for(int i = 0; i < r.size(); ++i){
       r(i) = x(i) - bcspline(xv(i), knots, (vector<Type>)mu.segment(1,mu.size()-1)) - mu(0);
-    return d0(r); 
+      if(i > 0 && !isNA(x(i)) && isNA(x(i-1))) // First non-NA
+	i0 = i;
+      if(i < x.size() && isNA(x(i+1)) && !isNA(x(i))) // Last non-NA
+	i1 = i;
+    }
+    return d0((vector<Type>)r.segment(i0, i1 - i0 + 1)); 
   }
 };
 
@@ -958,7 +965,7 @@ Type objective_function<Type>::operator() () {
       // P(C_i | S)
       for(int cc = 0; cc < G.cols(); ++cc){
 	if(!isNA(G(i,cc))){
-	  matrix<Type> MvecUse = Mvec(cc).transpose() * Gconversion(cc);
+	  matrix<Type> MvecUse = Mvec(cc) * Gconversion(cc); // Columns should sum to one
 	  ld2 += log(MvecUse(G(i,cc),j));
 	}
       }
@@ -1032,82 +1039,130 @@ Type objective_function<Type>::operator() () {
   ////////////////////////////////////////////////////////////////////////////
   ///////////////////////////////// Predict //////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////
-  array<Type> pred_posterior_mean(nFeatures, Y_pred.cols(), Gnlevels(0));
-  matrix<Type> pred_prior_logitprobability(Gnlevels(0), Y_pred.cols());
-  matrix<Type> pred_posterior_logprobability_shape(Gnlevels(0), Y_pred.cols());
-  matrix<Type> pred_posterior_logprobability_all(Gnlevels(0), Y_pred.cols());
-  matrix<Type> pred_posterior_logprobability_np(Gnlevels(0), Y_pred.cols());
-  
-  for(int i = 0; i < Y_pred.cols(); ++i){ // Loop over individuals
-    // vector<Type> th(thetaIn.rows()+1);
-    // th.setZero();
-    // if(isNA(dispersionGroup_pred(i))){
-    //   th = theta.col(proportionGroup_pred(i));
-    // }else{
-    //   for(int qq = 0; qq < thetaIn.rows(); ++qq)
-    // 	th(qq) = exp(thetaIn(qq,proportionGroup_pred(i)) + dispersion(qq,dispersionGroup_pred(i)));
-    //   th(th.size() - 1) = 1.0;
-    //   th /= th.sum();
-    // }
-    vector<Type> thtmp(Gnlevels(0)-1);
-    for(int j = 0; j < thtmp.size(); ++i){
-      thtmp(j) = ((vector<Type>)XTheta_pred.col(i) * (vector<Type>)betaTheta.col(j)).sum();
+
+  if(Y_pred.cols() == 0){	// Group mean/proportion
+    if(X_pred.cols() > 0){	// Group mean
+      array<Type> GROUP_mean_group(muUse.col(0).cols(), X_pred.cols(), Gnlevels(0));
+      GROUP_mean_group.setZero();
+      matrix<Type> GROUP_mean_common(commonMu.cols(), X_pred.cols());
+      GROUP_mean_common.setZero();
+      array<Type> GROUP_mean_total(muUse.col(0).cols(), X_pred.cols(), Gnlevels(0));
+      GROUP_mean_total.setZero();
+      
+      for(int i = 0; i < X_pred.cols(); ++i){
+	if(XCom_pred.rows() > 0 && XCom_pred.cols() > 0)
+	  GROUP_mean_common.col(i) = (vector<Type>)(XCom_pred.col(i).transpose() * commonMu);
+	
+	for(int j = 0; j < Gnlevels(0); ++j){
+	  GROUP_mean_group.col(j).col(i) = (vector<Type>)(X_pred.col(i).transpose() * muUse.col(j).matrix());
+	  GROUP_mean_total.col(j).col(i) =  (vector<Type>)GROUP_mean_group.col(j).col(i) + (vector<Type>)GROUP_mean_common.col(i);
+	}
+      }
+      REPORT(GROUP_mean_group);
+      REPORT(GROUP_mean_common);
+      REPORT(GROUP_mean_total);
+      ADREPORT(GROUP_mean_group);
+      ADREPORT(GROUP_mean_common);
+      ADREPORT(GROUP_mean_total);
     }
-    for(int zz = 0; zz < ZTheta_pred.size(); ++zz){
-      thtmp += (vector<Type>)(ZTheta_pred(zz).col(i).transpose() *  UTheta.col(zz));
+    if(XTheta_pred.cols() > 0){	// Group proportion
+      matrix<Type> GROUP_logitprobability(Gnlevels(0), XTheta_pred.cols());
+      GROUP_logitprobability.setZero();
+      for(int i = 0; i < XTheta_pred.cols(); ++i){
+	vector<Type> thtmp(Gnlevels(0)-1);
+	thtmp.setZero();
+	for(int j = 0; j < thtmp.size(); ++j){
+	  thtmp(j) = ((vector<Type>)XTheta_pred.col(i) * (vector<Type>)betaTheta.col(j)).sum();
+	}
+	vector<Type> logTh = toLogProportion(thtmp);
+	GROUP_logitprobability.col(i) = log2logit(logTh);
+      }
+      REPORT(GROUP_logitprobability);
+      ADREPORT(GROUP_logitprobability);
     }
-    vector<Type> logTh = toLogProportion(thtmp);
-    pred_prior_logitprobability.col(i) = log2logit(logTh);
     
-    Type postProbNorm_s = R_NegInf;
-    Type postProbNorm_a = R_NegInf;
-    Type postProbNorm_n = R_NegInf;
+  }else{
+    array<Type> pred_posterior_mean(nFeatures, Y_pred.cols(), Gnlevels(0));
+    matrix<Type> pred_prior_logitprobability(Gnlevels(0), Y_pred.cols());
+    matrix<Type> pred_posterior_logprobability_shape(Gnlevels(0), Y_pred.cols());
+    matrix<Type> pred_posterior_logprobability_all(Gnlevels(0), Y_pred.cols());
+    matrix<Type> pred_posterior_logprobability_np(Gnlevels(0), Y_pred.cols());
   
-    for(int j = 0; j < Gnlevels(0); ++j){ // Loop over groups
-      vector<Type> tmp;
-      tmp = Y_pred.col(i);
-      vector<Type> tmpMean = (vector<Type>)(X_pred.col(i).transpose() * muUse.col(j).matrix());
-      for(int zz = 0; zz < Z_pred.size(); ++zz){
-	tmpMean += (vector<Type>)(Z_pred(zz).col(i).transpose() * U.col(zz).col(j).matrix());
+    for(int i = 0; i < Y_pred.cols(); ++i){ // Loop over individuals
+      // vector<Type> th(thetaIn.rows()+1);
+      // th.setZero();
+      // if(isNA(dispersionGroup_pred(i))){
+      //   th = theta.col(proportionGroup_pred(i));
+      // }else{
+      //   for(int qq = 0; qq < thetaIn.rows(); ++qq)
+      // 	th(qq) = exp(thetaIn(qq,proportionGroup_pred(i)) + dispersion(qq,dispersionGroup_pred(i)));
+      //   th(th.size() - 1) = 1.0;
+      //   th /= th.sum();
+      // }
+      vector<Type> thtmp(Gnlevels(0)-1);
+      for(int j = 0; j < thtmp.size(); ++j){
+	thtmp(j) = ((vector<Type>)XTheta_pred.col(i) * (vector<Type>)betaTheta.col(j)).sum();
       }
-      if(XCom_pred.rows() > 0){
-	tmpMean += (vector<Type>)(XCom_pred.col(i).transpose() * commonMu);
+      for(int zz = 0; zz < ZTheta_pred.size(); ++zz){
+	thtmp += (vector<Type>)(ZTheta_pred(zz).col(i).transpose() *  UTheta.col(zz));
       }
-      for(int zz = 0; zz < ZCom_pred.size(); ++zz){
-	tmpMean += (vector<Type>)(ZCom_pred(zz).col(i).transpose() * UCom.col(zz));
-      }
+      vector<Type> logTh = toLogProportion(thtmp);
+      pred_prior_logitprobability.col(i) = log2logit(logTh);
+    
+      Type postProbNorm_s = R_NegInf;
+      Type postProbNorm_a = R_NegInf;
+      Type postProbNorm_n = R_NegInf;
+  
+      for(int j = 0; j < Gnlevels(0); ++j){ // Loop over groups
+	vector<Type> tmp;
+	tmp = Y_pred.col(i);
+	vector<Type> tmpMean = (vector<Type>)(X_pred.col(i).transpose() * muUse.col(j).matrix());
+	for(int zz = 0; zz < Z_pred.size(); ++zz){
+	  tmpMean += (vector<Type>)(Z_pred(zz).col(i).transpose() * U.col(zz).col(j).matrix());
+	}
+	if(XCom_pred.rows() > 0){
+	  tmpMean += (vector<Type>)(XCom_pred.col(i).transpose() * commonMu);
+	}
+	for(int zz = 0; zz < ZCom_pred.size(); ++zz){
+	  tmpMean += (vector<Type>)(ZCom_pred(zz).col(i).transpose() * UCom.col(zz));
+	}
 
-      vector<Type> scale(nFeatures);
-      scale.setConstant(1.0);
-      if(modelType == Model::MVMIX || modelType == Model::SNP2)
-	scale = exp((vector<Type>)(XLogScale_pred.col(i).transpose() * betaLogScale.col(j).matrix()));
-       // tmp -= tmpMean;
-      if(modelType != Model::SNP2)
-	pred_posterior_mean.col(j).col(i) = tmpMean;
+	vector<Type> scale(nFeatures);
+	scale.setConstant(1.0);
+	if(modelType == Model::MVMIX || modelType == Model::SNP2)
+	  scale = exp((vector<Type>)(XLogScale_pred.col(i).transpose() * betaLogScale.col(j).matrix()));
+	// tmp -= tmpMean;
+	if(modelType != Model::SNP2)
+	  pred_posterior_mean.col(j).col(i) = tmpMean;
 
-      Type ld =  dist[j]->operator()(tmp,tmpMean,scale);
-      Type ld2 = ld + logTh(j); 
-      // P(C_i | S)
-      for(int cc = 0; cc < G_pred.cols(); ++cc){
-	if(!isNA(G_pred(i,cc))){
-	  matrix<Type> MvecUse = Mvec(cc).transpose() * Gconversion(cc);
-	  ld2 += log(MvecUse(G_pred(i,cc),j));
-	}      
+	Type ld =  dist[j]->operator()(tmp,tmpMean,scale);
+	Type ld2 = ld + logTh(j); 
+	// P(C_i | S)
+	for(int cc = 0; cc < G_pred.cols(); ++cc){
+	  if(!isNA(G_pred(i,cc))){
+	    matrix<Type> MvecUse = Mvec(cc) * Gconversion(cc); // Columns should sum to one
+	    ld2 += log(MvecUse(G_pred(i,cc),j));
+	  }      
+	}
+	pred_posterior_logprobability_shape(j,i) = ld + logTh(j);
+	pred_posterior_logprobability_all(j,i) = ld2;
+	pred_posterior_logprobability_np(j,i) = ld;
+	postProbNorm_s = logspace_add2(postProbNorm_s, pred_posterior_logprobability_shape(j,i));
+	postProbNorm_a = logspace_add2(postProbNorm_a, pred_posterior_logprobability_all(j,i));
+	postProbNorm_n = logspace_add2(postProbNorm_n, pred_posterior_logprobability_np(j,i));
       }
-      pred_posterior_logprobability_shape(j,i) = ld + logTh(j);
-      pred_posterior_logprobability_all(j,i) = ld2;
-      pred_posterior_logprobability_np(j,i) = ld;
-      postProbNorm_s = logspace_add2(postProbNorm_s, pred_posterior_logprobability_shape(j,i));
-      postProbNorm_a = logspace_add2(postProbNorm_a, pred_posterior_logprobability_all(j,i));
-      postProbNorm_n = logspace_add2(postProbNorm_n, pred_posterior_logprobability_np(j,i));
+      for(int j = 0; j < Gnlevels(0); ++j){
+	pred_posterior_logprobability_shape(j,i) -= postProbNorm_s;
+	pred_posterior_logprobability_all(j,i) -= postProbNorm_a;
+	pred_posterior_logprobability_np(j,i) -= postProbNorm_n;      
+      }
     }
-    for(int j = 0; j < Gnlevels(0); ++j){
-      pred_posterior_logprobability_shape(j,i) -= postProbNorm_s;
-      pred_posterior_logprobability_all(j,i) -= postProbNorm_a;
-      pred_posterior_logprobability_np(j,i) -= postProbNorm_n;      
-    }
+    REPORT(pred_posterior_mean);
+    REPORT(pred_posterior_logprobability_shape);
+    REPORT(pred_posterior_logprobability_all);
+    REPORT(pred_posterior_logprobability_np);
+    REPORT(pred_prior_logitprobability);
   }
-
   ////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////// Output //////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////
@@ -1128,11 +1183,6 @@ Type objective_function<Type>::operator() () {
   // ADREPORT(posterior_logprobability_shape);
   // ADREPORT(posterior_logprobability_all);
 
-  REPORT(pred_posterior_mean);
-  REPORT(pred_posterior_logprobability_shape);
-  REPORT(pred_posterior_logprobability_all);
-  REPORT(pred_posterior_logprobability_np);
-  REPORT(pred_prior_logitprobability);
 
   // ADREPORT(pred_posterior_mean);
   // ADREPORT(pred_posterior_logprobability_shape);

@@ -151,14 +151,17 @@ mlld <- function(## Data related
         if(any(groupNlevels != Ngroups))
             stop("groupConversionList must be given when different number of groups are used")
         groupConversionList <- lapply(seq_along(groupNlevels), function(i) diag(1,Ngroups))
-    }else if(length(groupConversionList) != ncol(group) - 1){
-            stop("Length of groupConversionList must be one less than the number of columns of group.")
-    }else{
+    }else if(confusionLevelTypes[1] == "Known"){
+        if(length(groupConversionList) != ncol(group) - 1)
+            stop("Length of groupConversionList must be one less than the number of columns of group when the first confusionLevelTypes is known.")               
         groupConversionList <- c(list(diag(1,Ngroups)), groupConversionList)
-        if(!(all(sapply(groupConversionList,nrow) == groupNlevels) &&
-             all(sapply(groupConversionList,ncol) == Ngroups))){
-            stop("group conversion matrices have wrong dimensions.")
-        }
+            if(!(all(sapply(groupConversionList,nrow) == groupNlevels) &&
+                 all(sapply(groupConversionList,ncol) == Ngroups))){
+                stop("group conversion matrices have wrong dimensions.")
+            }
+    }else{
+        if(length(groupConversionList) != ncol(group))
+            stop("Length of groupConversionList must equal to the number of columns of group when the first confusionLevelTypes is not known.")                       
     }
     
     ## if(!is.factor(proportionGroup))

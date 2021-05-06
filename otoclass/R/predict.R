@@ -114,7 +114,7 @@ getGroupMeans <- function(f, data){
 ##' @rdname getGroupMeans
 ##' @method getGroupMeans mlld
 ##' @export
-getGroupMeans.mlld <- function(f, data){
+getGroupMeans.mlld <- function(f, data, keep.cov = FALSE){
     if(missing(data))
         data <- f$data
     tmb_data <- f$tmb_data
@@ -148,14 +148,14 @@ getGroupMeans.mlld <- function(f, data){
                      DLL = "otoclass")
     rp <- obj$report()
     sdr <- TMB::sdreport(obj, obj$par, f$opt$he)
-    ssdr <- TMB::summary.sdreport(sdr)
+    ssdr <- TMB::summary.sdreport(sdr)    
     ##
     grpMean <- ssdr[rownames(ssdr) == "GROUP_mean_group",]
     fit_mean <- do.call("structure",c(list(.Data=unname(grpMean[,1])), attributes(rp$GROUP_mean_group)))
     dimnames(fit_mean) <- list(f$muNames[[2]],seq_len(nrow(data)),f$muNames[[3]])
     sd_mean <- do.call("structure",c(list(.Data=unname(grpMean[,2])), attributes(rp$GROUP_mean_group)))
     dimnames(sd_mean) <- list(f$muNames[[2]],seq_len(nrow(data)),f$muNames[[3]])
-    ##
+     ##
     grpCommon <- ssdr[rownames(ssdr) == "GROUP_mean_common",]
     fit_com <- do.call("structure",c(list(.Data=unname(grpCommon[,1])), attributes(rp$GROUP_mean_common)))
     dimnames(fit_com) <- list(f$muNames[[2]],seq_len(nrow(data)))
@@ -168,13 +168,28 @@ getGroupMeans.mlld <- function(f, data){
     sd_total <- do.call("structure",c(list(.Data=unname(grpTotal[,2])), attributes(rp$GROUP_mean_total)))
     dimnames(sd_total) <- list(f$muNames[[2]],seq_len(nrow(data)),f$muNames[[3]])
     ##
-    list(fit = list(group = fit_mean,
-                    common = fit_com,
-                    total = fit_total),
-         se.fit = list(group = sd_mean,
-                    common = sd_com,
-                    total = sd_total))
-                    
+    r <- list(fit = list(group = fit_mean,
+                         common = fit_com,
+                         total = fit_total),
+              se.fit = list(group = sd_mean,
+                            common = sd_com,
+                            total = sd_total))
+    if(keep.cov){
+        ii <- do.call("structure",c(list(.Data=unname(which(names(sdr$value) == "GROUP_mean_total"))), attributes(rp$GROUP_mean_total)))
+        cov_list <- lapply(seq_len(dim(ii)[3]), function(gg){
+            r <- lapply(seq_len(dim(ii)[2]), function(kk){
+                sdr$cov[ii[,kk,gg],ii[,kk,gg]]
+            })
+            names(r) <- seq_len(nrow(data))
+            r
+        })
+        names(cov_list) <- f$muNames[[3]]
+        r$cov <- cov_list
+    ##     cov_total <- sdr$cov[]
+    ## rownames() <- colnames() <- 
+
+    }
+    return(r)
 }
 
 

@@ -42,6 +42,7 @@ mlld(
   Nefd = 5,
   lower = list(),
   upper = list(),
+  guessStartingValues = TRUE,
   ...
 )
 }

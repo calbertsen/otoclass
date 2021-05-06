@@ -21,18 +21,18 @@ vcov.mlld <- function(x,...){
 
 ##' @export
 residuals.mlld <- function(x,...){
+    if(x$tmb_data$model != 0)
+        stop("Residuals are only implemented for MVMIX data")
     pr <- predict(x)
     Sigma <- vcov(x)
     CC <- lapply(Sigma, function(ss) solve(t(chol(ss))))
-    theta <- x$rp$theta
-    Mvec <- x$rp$Mvec
+    ##theta <- getGroupProportion(x) ## x$rp$theta
+    Mvec <- x$rp$Mvec[[1]]
     F <- sapply(1:nrow(x$y),function(i){
-        th <- theta[,x$proportionGroup[i]]
-        Muse <- Mvec[[x$confusionGroup[i]]][ifelse(is.na(x$group[i]),1,x$group[i]),]
-        NC <- sum(Muse * th)
+        th <- plogis(x$rp$prior_logitprobability[,i])
         Reduce("+",sapply(1:ncol(pr$posterior),function(j){
             y2 <- CC[[j]] %*% (x$y[i,,drop=TRUE] - pr$fit[i,,j])
-            (pnorm(y2,0,1) * (1-x$rp$tmixp[,j]) + x$rp$tmixp[,j]*pt(y2,x$rp$df[,j])) * th[j] * Muse[j] / NC            
+            (pnorm(y2,0,1) * (1-x$rp$tmixp[,j]) + x$rp$tmixp[,j]*pt(y2,x$rp$df[,j])) * th[j]
         }, simplify = FALSE))
     })
     if(ncol(x$y) == 1)

@@ -11,6 +11,12 @@
 #include "../inst/include/polygon.hpp"
 #include "../inst/include/floodfill.hpp"
 
+#define mkString Rf_mkString
+#define mkChar Rf_mkChar
+#define allocVector Rf_allocVector
+#define ScalarInteger Rf_ScalarInteger
+#define ScalarLogical Rf_ScalarLogical
+#define isNull Rf_isNull
 #define install Rf_install
 #define findVar Rf_findVar
 

@@ -12,6 +12,7 @@ mlld(
   formulaCommon = ~1,
   formulaProportion = ~1,
   formulaLogScale = ~-1,
+  equalLogScale = FALSE,
   lp_penalty = NA,
   lambda = 0.4,
   estimateLambda = TRUE,

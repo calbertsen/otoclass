@@ -28,6 +28,7 @@ mlld <- function(## Data related
                  formulaCommon = ~1,
                  formulaProportion = ~1,
                  formulaLogScale = ~ -1,
+                 equalLogScale = FALSE,
                  ##formulaDispersion = ~ -1,
                  ##proportionGroup = factor(rep("Baseline",nrow(y))),
                  ##confusionGroup = NULL,
@@ -320,6 +321,9 @@ mlld <- function(## Data related
 
     
 ##### Prepare proportion model matrix #####
+    fixBLS <- FALSE
+    if(isTRUE(all.equal(formulaLogScale, ~-1)) & observationType == 3)
+        fixBLS <- TRUE
     formulaLogScale <- update.formula(formulaLogScale, ~ . +1)
     mfLogScale <- model.frame(lme4::nobars(formulaLogScale), data,
                               na.action = na.pass)
@@ -628,8 +632,8 @@ mlld <- function(## Data related
         map$commonMu <- factor(cMuMap)
     }
     if(nrow(par$betaLogScale) > 0){
-            blsMap <- array(1:length(par$betaLogScale),dim = dim(par$betaLogScale))
-        if(observationType %in% c(1,3,4,5)){
+        blsMap <- array(1:length(par$betaLogScale),dim = dim(par$betaLogScale))
+        if(observationType %in% c(1,4,5) || fixBLS){
             blsMap[] <- NA
         }else if(observationType == 0){
             blsMap[1,,] <- NA
@@ -638,7 +642,14 @@ mlld <- function(## Data related
                 blsMap[,SNP2dm,] <- 1
             blsMap[,!SNP2dm,] <- NA
             par$betaLogScale[,!SNP2dm,] <- Inf
-        }                        
+        }else if(observationType == 3){ # For observationType == 3, it is used to scale along the process
+            blsMap[1,1,] <- NA
+
+        }
+        if(equalLogScale){
+            for(i in 1:dim(blsMap)[3])
+                blsMap[,,i] <- blsMap[,,1]
+        }
         map$betaLogScale <- factor(blsMap)
     }
     if(all(is.na(map$commonMu))){

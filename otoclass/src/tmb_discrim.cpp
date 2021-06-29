@@ -3,6 +3,12 @@
 #include "../inst/include/efd.hpp"
 
 
+#define mkString Rf_mkString
+#define mkChar Rf_mkChar
+#define allocVector Rf_allocVector
+#define ScalarInteger Rf_ScalarInteger
+#define ScalarLogical Rf_ScalarLogical
+#define isNull Rf_isNull
 #define install Rf_install
 #define findVar Rf_findVar
 #define setAttrib Rf_setAttrib
@@ -177,6 +183,12 @@ double log2logit(double logx){
 }
 
 template<class Type>
+Type log2logit(Type logx){
+  return logx - logspace_sub((Type)0.0,logx);
+}
+
+
+template<class Type>
 AD<Type> log2logit(AD<Type> logx){
   return logx - logspace_sub((AD<Type>)0.0,logx);
 }
@@ -328,7 +340,7 @@ struct SPL_AR1 : OBSERVATION_DENSITY<Type> {
   
   SCALE_t<AR1_t<N01<Type> > > d0;
   
-  SPL_AR1() : knots(0) {};
+  SPL_AR1() : xv(0), knots(0) {};
   SPL_AR1(int N,
 	  vector<Type> knots_,
 	  Type sd,
@@ -339,16 +351,20 @@ struct SPL_AR1 : OBSERVATION_DENSITY<Type> {
 
   Type operator()(vector<Type> x, vector<Type> mu, vector<Type> scale){
     vector<Type> r(x.size());
+    r.setZero();
+    vector<Type> rs(x.size());
+    rs.setZero();
     int i0 = 0;
     int i1 = x.size() - 1;
     for(int i = 0; i < r.size(); ++i){
       r(i) = x(i) - bcspline(xv(i), knots, (vector<Type>)mu.segment(1,mu.size()-1)) - mu(0);
+      rs(i) = (bcspline(xv(i), knots, (vector<Type>)scale.segment(1,scale.size()-1)) - scale(0));
       if(i > 0 && !isNA(x(i)) && isNA(x(i-1))) // First non-NA
 	i0 = i;
-      if(i < x.size() && isNA(x(i+1)) && !isNA(x(i))) // Last non-NA
+      if(i < x.size()-1 && isNA(x(i+1)) && !isNA(x(i))) // Last non-NA
 	i1 = i;
     }
-    return d0((vector<Type>)r.segment(i0, i1 - i0 + 1)); 
+    return d0((vector<Type>)r.segment(i0, i1 - i0 + 1) / exp((vector<Type>)rs.segment(i0, i1 - i0 + 1))) + sum((vector<Type>)rs.segment(i0, i1 - i0 + 1)); 
   }
 };
 
@@ -704,7 +720,6 @@ Type objective_function<Type>::operator() () {
   ////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////// Check //////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////
-
   if(G.rows() != Y.cols())
     Rf_error("Wrong input length. G and Y must match");
 
@@ -778,7 +793,6 @@ Type objective_function<Type>::operator() () {
     }
   }
 
-
   
   // Transform theta
   // matrix<Type> theta(thetaIn.rows() + 1,thetaIn.cols());
@@ -822,7 +836,6 @@ Type objective_function<Type>::operator() () {
     for(int j = 0; j < tmixpIn.cols(); ++j)
       tmixp(i,j) = 1.0 / (1.0 + exp(-tmixpIn(i,j)));
   
-
   // Prepare observational distributions
   std::vector<OBSERVATION_DENSITY<Type>* > dist(Gnlevels(0)); //(NLEVELS(G));
   for(int i = 0; i < Gnlevels(0); ++i){
@@ -954,14 +967,18 @@ Type objective_function<Type>::operator() () {
       scale.setConstant(1.0);
       if(modelType == Model::MVMIX || modelType == Model::SNP2){
 	scale = exp((vector<Type>)(XLogScale.col(i).transpose() * betaLogScale.col(j).matrix()));
+      }else if(modelType == Model::SPL_AR1){
+	scale = (vector<Type>)(XLogScale.col(i).transpose() * betaLogScale.col(j).matrix());
       }
       // tmp -= tmpMean;
       if(modelType != Model::SNP2)
 	posterior_mean.col(j).col(i) = tmpMean;
       // P(Y | S)
       Type ld = -dist[j]->operator()(tmp,tmpMean,scale); // dist returns negative log-likelihood!
+
       // P(Y | S) * P(S)      
-      Type ld2 = ld + logTh(j); 
+      Type ld2 = ld + logTh(j);
+
       // P(C_i | S)
       for(int cc = 0; cc < G.cols(); ++cc){
 	if(!isNA(G(i,cc))){
@@ -969,6 +986,7 @@ Type objective_function<Type>::operator() () {
 	  ld2 += log(MvecUse(G(i,cc),j));
 	}
       }
+
       // lp(j) = ld + log(th(j)) + log(Muse(j)) - log(NormalizationConstant);
       posterior_logprobability_shape(j,i) = ld + logTh(j);
       posterior_logprobability_all(j,i) = ld2;
@@ -976,6 +994,7 @@ Type objective_function<Type>::operator() () {
       lps = logspace_add2(lps,ld2);
       postProbNorm = logspace_add2(postProbNorm, posterior_logprobability_shape(j,i));
       postProbNormNP = logspace_add2(postProbNormNP, ld);
+
 	    
     }
     for(int j = 0; j < Gnlevels(0); ++j){
@@ -985,7 +1004,7 @@ Type objective_function<Type>::operator() () {
     }
     nll -= lps;
   }
- 
+
   ////////////////////////////////////////////////////////////////////////////
   ///////////////////////////// Regularization ///////////////////////////////
   ////////////////////////////////////////////////////////////////////////////

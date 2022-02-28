@@ -481,7 +481,6 @@ public:
     // vector<Type> tmp = (x - mu) / scale;
     vector<Type> z = inv_L_Sigma*x;
     Type ldr = sum(logdrobust(z,p1,df));
-    Rprintf("\t\t\tz(0): %f - logdrobust: %f - halfLogDetS: %f\n",z(0),ldr,halfLogDetS);
     return -sum(logdrobust(z,p1,df))+halfLogDetS;// + sum(log(scale));
   }
   Type operator()(vector<Type> x, vector<Type> mu, vector<Type> scale){
@@ -495,13 +494,9 @@ public:
 	hasNA++;
       }
     if(hasNA == 0){
-      Rprintf("\t\tNot NA\n");
       vector<Type> tmp = (x - mu) / scale;
       Type v1 = this->operator()(tmp);
       Type v2 = sum(log(scale));
-      Rprintf("\t\ttmp(0): %f\n",tmp(0));
-      Rprintf("\t\tv1: %f\n",v1);
-      Rprintf("\t\tv2: %f\n",v2);
       return v1+v2;
     }
     if(hasNA == x.size()){
@@ -982,7 +977,6 @@ Type objective_function<Type>::operator() () {
     // Contribution from G
     // nll -= log(NormalizationConstant);
     // Contrbution from Y
-    Rprintf("Obs %d - nll before: %f\n",i, nll);
     for(int j = 0; j < Gnlevels(0); ++j){ // Loop over groups
       vector<Type> tmp = Y.col(i);
       vector<Type> tmpMean = (vector<Type>)(X.col(i).transpose() * muUse.col(j).matrix());
@@ -1025,7 +1019,6 @@ Type objective_function<Type>::operator() () {
       lps = logspace_add2(lps,ld2);
       postProbNorm = logspace_add2(postProbNorm, posterior_logprobability_shape(j,i));
       postProbNormNP = logspace_add2(postProbNormNP, ld);
-      Rprintf("\tGrp %d - lps: %f - ld: %f - ld2: %f\n",j, lps, ld, ld2);    
     }
     for(int j = 0; j < Gnlevels(0); ++j){
       posterior_logprobability_shape(j,i) -= postProbNorm;

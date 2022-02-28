@@ -480,7 +480,6 @@ public:
   Type operator()(vector<Type> x){
     // vector<Type> tmp = (x - mu) / scale;
     vector<Type> z = inv_L_Sigma*x;
-    Type ldr = sum(logdrobust(z,p1,df));
     return -sum(logdrobust(z,p1,df))+halfLogDetS;// + sum(log(scale));
   }
   Type operator()(vector<Type> x, vector<Type> mu, vector<Type> scale){

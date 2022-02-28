@@ -9,14 +9,16 @@ calculateVarBetweenGroups <- function(x, ...){
 calculateVarBetweenGroups.mlld <- function(x, ...){
     if(!is.na(x$varBetweenGroups))
         return(x$varBetweenGroups)
-    grp <- getGroupDataFrame(x)
+    grp <- getGroupDataFrame.mlld(x)
     pr <- predict(x, group = grp)
-    muList <- lapply(seq_along(pr$class), function(i) {
-        pr$fit[i,,pr$class[i], drop = TRUE]
-    })
+    muList <- lapply(lapply(seq_along(levels(pr$class)), function(i) {
+        vv <- pr$fit[as.numeric(pr$class)==i,,i, drop = TRUE]
+        matrix(vv,sum(as.numeric(pr$class)==i),dim(pr$fit)[2])
+    }), colMeans)
     muAll <- colMeans(x$y)
-    N <- nrow(pr$fit)
-    Sigma <- Reduce("+",lapply(muList, function(xx) t(xx-muAll) %*% (xx-muAll))) / (N-1)
+    N <- length(muList)
+    Sigma <- Reduce("+",lapply(muList, function(xx) (xx-muAll) %*% t(xx-muAll))) / N
+    colnames(Sigma) <- rownames(Sigma) <- names(muAll)
     return(Sigma)    
 }
 
@@ -50,7 +52,7 @@ projection <- function(x, ...){
 
 ##' @export
 projection.mlld <- function(x, y, ...){
-    if(missing(y) & missing(group))
+    if(missing(y))
         y <- x$y
         ## group <- x$group
     ## }else if(!(missing(y) & missing(group))){
@@ -67,9 +69,9 @@ projection.mlld <- function(x, y, ...){
     ee <- eigen(solve(x$varWithinGroups) %*% x$varBetweenGroups,symmetric = FALSE)
     noImPart <- sapply(ee$values, function(x) isTRUE(all.equal(Im(x),0)))
     nonZeroRe <- !sapply(ee$values / sum(ee$values),function(x)isTRUE(all.equal(Re(x),0)))
-    eeUse <- nonZeroRe & noImPart
     if(any(!noImPart & nonZeroRe))
         warning("Imaginary part of eigen vectors ignored.")
+    eeUse <- head(which(nonZeroRe & noImPart), pmin(length(x$muNames[[3]]),ncol(y))-1)
     evec <- Re(ee$vectors[,eeUse, drop = FALSE])
     rownames(evec) <- x$muNames[[2]]
     colnames(evec) <- paste0("CD",1:ncol(evec))
@@ -79,11 +81,16 @@ projection.mlld <- function(x, y, ...){
     attr(projdat,"relative_importance") <- Re(ee$values[eeUse]) / sum(Re(ee$values[eeUse]))
     ## attr(projdat,"group") <- group
     attr(projdat,"directions") <- evec
-    class(projdat) <- "projection"
+    attr(projdat,"group") <- getGroupDataFrame(x)
+    class(projdat) <- "projection"    
     return(projdat)
 }
 
-
+##' @export
+print.projection <- function(x){
+    cat("Direction\n")
+    print(attr(x,"directions"))
+}
 
 addTrans <- Vectorize(function(name,alpha=1){
     if(is.na(name) | is.null(name))
@@ -97,8 +104,8 @@ addTrans <- Vectorize(function(name,alpha=1){
 
 ##' @export
 plot.projection <- function(x, onlyFirst = FALSE, xlim = xrng, ylim = yrng, ...){
-    group <- attr(x,"group")
-    lvl <- levels(attr(x,"group"))
+    group <- attr(x,"group")[,1]
+    lvl <- levels(attr(x,"group"))[,1]
     if(any(is.na(group))){
         group <- as.character(group)
         group[is.na(group)] <- "Unknown"

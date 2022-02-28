@@ -1,9 +1,57 @@
+ConfusionMatrix <- function(G, P, accuracy = TRUE){
+    ## Handle levels for factors!
+    tab <- table(True = G, Predicted = P)
+    if(!accuracy) return(tab)
+    tab / rowSums(tab)[row(tab)]
+}
+metric_MatthewCorrelationCoefficient <- function(G, P){
+    C <- ConfusionMatrix(G,P, FALSE)
+    tk <- rowSums(C)
+    pk <- colSums(C)
+    cc <- sum(diag(C))
+    s <- sum(C)
+    (cc * s - sum(tk * pk)) / sqrt((s^2 - sum(pk^2)) * (s^2 - sum(tk^2)) )
+}
+metric_totalAccuracy <- function(G, P){
+    mean(G==P)
+}
+metric_balancedAccuracy <- function(G, P){
+    mean(diag(ConfusionMatrix(G,P)))
+}
+
+
 ##' @export
-crossval <- function(x,
+leaveoneout <- function(f, ...)
+    UseMethod("leaveoneout")
+
+##' @export
+leaveoneout.mlld <- function(f, prior = NULL){
+    cl0 <- f$call
+    cl0$group <- getGroupDataFrame(f)
+    cl0$parlist <- f$pl
+    cl0$doSdreport <- FALSE
+    e <- environment(cl0)
+    doOne <- function(i){
+        cat(i,"\n")
+        cl <- cl0
+        cl$group[i,] <- NA
+        suppressWarnings(oo <- capture.output(fi <- eval(cl,e)))
+        predict(fi, prior = prior)$class[i]        
+    }
+    r <- sapply(seq_len(nrow(cl0$group)), doOne)
+    tab <- table(True = cl0$group[,1], Predicted = r)    
+    list(AccuracyMatrix = ConfusionMatrix(cl0$group[,1], r),
+         MCC = metric_MatthewCorrelationCoefficient(cl0$group[,1], r),
+         BalancedAccuracy = metric_balancedAccuracy(cl0$group[,1], r),
+         TotalAccuracy = metric_totalAccuracy(cl0$group[,1], r),
+         Predictions = r)
+}
+
+
+
+##' @export
+crossval <- function(f,
                      folds,
-                     by,
-                     type = c("confusion", "feature"),
-                     nPerBy = 5,
                      ...){
     UseMethod("crossval")
 }
@@ -18,82 +66,180 @@ crossval <- function(x,
 ## cv2 <- crossval(x2)
 
 ##' @export
-crossval.mlld <- function(x,
-                          folds = nrow(eval(x$call$train)),
-                          by,
-                          type = c("confusion", "feature"),
-                          nPerBy = 5,
-                          gridN = 20,
-                          gridMaxStep = 5,
+crossval.mlld <- function(f,
+                          folds,
+                          prior = NULL,
                           ...){
-    type <- match.arg(type)
-    if(type != "confusion")
-        stop("Cross validation type not implemented yet!")
-    ## Sample 
-    if(missing(by)){
-        N <- nrow(eval(x$call$train))
-        foldIndex <- sample(1:folds,size = N, replace = N > folds)
-    }else{
-        stop("Stratified sampling not implemented yet!")
+    cl0 <- f$call
+    e <- environment(cl0)
+    cl0$group <- getGroupDataFrame(f)
+    cl0$y <- eval(cl0$y,e)
+    cl0$data <- eval(cl0$data,e)
+    cl0$parlist <- f$pl
+    cl0$doSdreport <- FALSE
+    if(is.null(cl0$data)){
+        cl0$data <- data.frame(ID = seq_len(length(cl0$group)))
     }
+    if(!is.matrix(cl0$y))
+        cl0$y <- matrix(cl0$y,ncol = 1)
+    doOne <- function(i){
+        cat(i,"\n")
+        cl <- cl0
+        cl$group <- cl0$group[-i,,drop=FALSE]
+        cl$y <- cl0$y[-i,,drop=FALSE]
+        cl$data <- cl0$data[-i,,drop=FALSE]
+        suppressWarnings(oo <- capture.output(fi <- eval(cl,e)))
+        predict(fi, y = cl0$y[i,,drop=FALSE], data = cl0$data[i,,drop=FALSE], prior = prior)$class        
+    }
+    kk <- sample(seq_len(folds), nrow(cl0$group), replace = TRUE)
+    indx <- split(seq_len(nrow(cl0$group)), kk)
+    r <- unlist(lapply(indx, doOne))[order(unlist(indx))]
+    tab <- table(True = cl0$group[,1], Predicted = r)    
+    list(AccuracyMatrix = ConfusionMatrix(cl0$group[,1], r),
+         MCC = metric_MatthewCorrelationCoefficient(cl0$group[,1], r),
+         BalancedAccuracy = metric_balancedAccuracy(cl0$group[,1], r),
+         TotalAccuracy = metric_totalAccuracy(cl0$group[,1], r),
+         Predictions = r,
+         Fold = kk)
+}
 
-    if(type == "confusion"){
-        cl <- as.list(x$call)
-        pl <- x$pl
-        trueGroup <- eval(cl$group)
-        res <- sapply(sort(unique(foldIndex)), function(i){
-            FUN <- eval(cl[[1]])
-            args <- lapply(cl[-1],function(aa)eval(aa))
-            args$test <- args$train[foldIndex == i, , drop = FALSE]
-            args$train <- args$train[foldIndex != i, , drop = FALSE]
-            args$group <- args$group[foldIndex != i]
-            args$parlist <- pl
-            if(!is.null(args$data)){
-                args$dataTest <- args$data[foldIndex == i, , drop = FALSE]
-                args$data <- args$data[foldIndex != i, , drop = FALSE]
-            }
-            args$estimateUnbiasedTestProportions <- FALSE
-            args$biasCorrectionGroup <- NULL
-            suppressWarnings(y <- do.call(FUN,args))
-            pred <- predict(y)$class
-            cbind(data.frame(true=trueGroup[foldIndex == i], prediction=pred),args$dataTest)
-        }, simplify = FALSE)
-        res <- do.call("rbind",res)
-        op <- list(prediction = res,
-                   crossval_table = table(True=res$true,Predicted=res$prediction))
-        op$total_success <- sum(diag(op$crossval_table)) / sum(op$crossval_table)
-        op$groupwise_success <- diag(op$crossval_table) / rowSums(op$crossval_table)
-        op$group_numbers <- rowSums(op$crossval_table)
-        op$confusion_matrix <- op$crossval_table / rowSums(op$crossval_table)
-        class(op) <- c("crossval_confusion","crossval_mlld")
-        return(op)
-    }else if(type == "feature"){
-        warning("crossval for features should not be used yet")
-        cl <- as.list(x$call)
-        pl <- x$pl
-        trueGroup <- eval(cl$group)
-        res <- sapply(sort(unique(foldIndex)), function(i){
-            FUN <- eval(cl[[1]])
-            args <- lapply(cl[-1],function(aa)eval(aa))
-            args$test <- args$train[foldIndex == i, , drop = FALSE]
-            args$train <- args$train[foldIndex != i, , drop = FALSE]
-            args$group <- args$group[foldIndex != i]
-            args$parlist <- pl
-            if(!is.null(args$data)){
-                args$dataTest <- args$data[foldIndex == i, , drop = FALSE]
-                args$data <- args$data[foldIndex != i, , drop = FALSE]
-            }
-            args$estimateLambda <- FALSE
-            xvals <- seq(-gridMaxStep,gridMaxStep,len = gridN)
-            sapply(xvals,function(ii){
-                arg0 <- args
-                arg0$parlist$logLambda <- arg0$parlist$logLambda + ii
-                suppressWarnings(y <- do.call(FUN,args))
-                pred <- predict(y)$class
-                tab <- table(true=trueGroup[foldIndex == i], pred)
-                min(diag(tab)/rowSums(tab))
-            })
-        }, simplify = FALSE)
-        return(res)
+
+##' @export
+forwardSelection <- function(f, ...)
+    UseMethod("forwardSelection")
+
+
+##' @export
+forwardSelection.mlld <- function(f, prior = NULL, maxit = Inf, criterion = c("MCC","TA","BA"),testPct = 0.25){
+    criterion <- match.arg(criterion)
+    if(criterion == "MCC"){
+        cFun <- metric_MatthewCorrelationCoefficient
+    }else if(criterion == "TA"){
+        cFun <- metric_totalAccuracy
+    }else if(criterion == "BA"){
+        cFun <- metric_balancedAccuracy
+    }else{
+        stop("Criteria not implemented")
     }
+    cl0 <- f$call
+    e <- environment(f$call)
+    cl0$group <- getGroupDataFrame(f)
+    cl0$y <- eval(cl0$y,e)
+    cl0$data <- eval(cl0$data,e)
+    if(!is.matrix(cl0$y) || (is.matrix(cl0$y) && ncol(cl0$y) <= 1))
+        stop("Not enough features to select")
+    cl0$doSdreport <- FALSE
+    cl0$estimateLambda <- FALSE
+    cl0$lp_penalty <- NA
+    testIndex <- sort(unlist(lapply(split(seq_len(nrow(cl0$y)), cl0$group[,1]), function(ii) sample(ii,testPct * length(ii)))))
+    trainIndex <- setdiff(seq_len(nrow(cl0$y)), testIndex)
+    trY <- cl0$y[testIndex,,drop=FALSE]
+    trD <- cl0$data[testIndex,,drop=FALSE]
+    trG <- cl0$group[testIndex,,drop=FALSE]
+    cl0$y <- cl0$y[trainIndex,,drop=FALSE]
+    cl0$data <- cl0$data[trainIndex,,drop=FALSE]
+    cl0$group <- cl0$group[trainIndex,,drop=FALSE]
+    Selected <- c()
+    Remain <- seq_len(ncol(cl0$y))
+    Accuracy <- -Inf
+    while(length(Remain) > 0 && length(Selected) <= maxit){
+        cat("Selecting feature:",length(Selected)+1,"\n")
+        ## Try all the models
+        v <- sapply(Remain, function(inext){
+            cl <- cl0
+            cl$y <- cl0$y[, c(Selected, inext), drop=FALSE]
+            suppressWarnings(oo <- capture.output(fi <- eval(cl,e)))
+            P <- predict(fi,
+                         y = trY[,c(Selected, inext),drop=FALSE],
+                         data = trD,
+                         prior = prior)$class
+            cFun(trG[,1], P)
+        })        
+        v[is.nan(v) | is.na(v) | !is.finite(v)] <- -Inf
+        ## Update
+        if(any(v > tail(Accuracy,1))){
+            cat("\t",sprintf("Criterion improved from %f to %f",tail(Accuracy,1),max(v)),"\n")
+            cat("\t",sprintf("Selecting %s",f$muNames[[2]][Remain[which.max(v)]]),"\n")
+            Selected <- c(Selected, Remain[which.max(v)])
+            Remain <- setdiff(Remain,Selected)
+            Accuracy <- c(Accuracy,max(v))
+        }else{
+            break;
+        }
+    }
+    data.frame(Number = seq_along(Selected),
+               Selected = f$muNames[[2]][Selected],
+               Criterion = tail(Accuracy,-1),
+               FeatureIndex = Selected)
+}
+
+
+##' @export
+backwardSelection <- function(f, ...)
+    UseMethod("backwardSelection")
+
+##' @export
+backwardSelection.mlld <- function(f, prior = NULL, maxit = Inf, criterion = c("MCC","TA","BA"),testPct = 0.25){
+    criterion <- match.arg(criterion)
+    if(criterion == "MCC"){
+        cFun <- metric_MatthewCorrelationCoefficient
+    }else if(criterion == "TA"){
+        cFun <- metric_totalAccuracy
+    }else if(criterion == "BA"){
+        cFun <- metric_balancedAccuracy
+    }else{
+        stop("Criteria not implemented")
+    }
+    cl0 <- f$call
+    e <- environment(f$call)
+    cl0$group <- getGroupDataFrame(f)
+    cl0$y <- eval(cl0$y,e)
+    cl0$data <- eval(cl0$data,e)
+    if(!is.matrix(cl0$y) || (is.matrix(cl0$y) && ncol(cl0$y) <= 1))
+        stop("Not enough features to select")
+    cl0$doSdreport <- FALSE
+    cl0$estimateLambda <- FALSE
+    cl0$lp_penalty <- NA
+    testIndex <- sort(unlist(lapply(split(seq_len(nrow(cl0$y)), cl0$group[,1]), function(ii) sample(ii,testPct * length(ii)))))
+    trainIndex <- setdiff(seq_len(nrow(cl0$y)), testIndex)
+    trY <- cl0$y[testIndex,,drop=FALSE]
+    trD <- cl0$data[testIndex,,drop=FALSE]
+    trG <- cl0$group[testIndex,,drop=FALSE]
+    cl0$y <- cl0$y[trainIndex,,drop=FALSE]
+    cl0$data <- cl0$data[trainIndex,,drop=FALSE]
+    cl0$group <- cl0$group[trainIndex,,drop=FALSE]
+    Selected <- c()
+    Remain <- seq_len(ncol(cl0$y))
+    Accuracy <- -Inf
+    while(length(Remain) > 1 && length(Selected) <= maxit){
+        cat("Removing feature:",length(Remain)+1,"\n")
+        ## Try all the models
+        v <- sapply(Remain, function(inext){
+            cl <- cl0
+            cl$y <- cl0$y[, setdiff(Remain, inext), drop=FALSE]
+            suppressWarnings(oo <- capture.output(fi <- eval(cl,e)))
+            P <- predict(fi,
+                         y = trY[,setdiff(Remain, inext),drop=FALSE],
+                         data = trD,
+                         prior = prior)$class
+            cFun(trG[,1], P)
+        })
+        v[is.nan(v) | is.na(v) | !is.finite(v)] <- -Inf
+        ## Update
+        if(any(v > tail(Accuracy,1))){
+            cat("\t",sprintf("Criterion improved from %f to %f",tail(Accuracy,1),max(v)),"\n")
+            cat("\t",sprintf("Removing %s",f$muNames[[3]][Remain[which.max(v)]]),"\n")
+            Selected <- c(Selected, Remain[which.max(v)])
+            Remain <- setdiff(Remain,Selected)
+            Accuracy <- c(Accuracy,max(v))
+        }else{
+            break;
+        }
+    }
+    list(Remaining = f$muNames[[3]][Remain],
+         Removed = data.frame(Number = seq_along(Selected),
+                              Selected = f$muNames[[2]][Selected],
+                              Criterion = tail(Accuracy,-1),
+                              FeatureIndex = Selected)
+         )
 }

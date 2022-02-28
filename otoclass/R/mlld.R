@@ -61,7 +61,7 @@ mlld <- function(## Data related
                  forceMeanIncrease = FALSE,
                  ## na.pass = FALSE,
                  fixZeroGradient = TRUE,
-                 SNP2dm = TRUE,
+                 SNP2dm = FALSE,
                  sameSNP2dm = TRUE,
                  SPLknots = NULL,
                  Nefd = 5,
@@ -78,6 +78,7 @@ mlld <- function(## Data related
                  ...){
     
     cl <- match.call()
+    environment(cl) <- parent.frame(1L)
     observationType <- match.argInt(observationType) - 1
  
 ##### Checks #####
@@ -320,7 +321,7 @@ mlld <- function(## Data related
     }
 
     
-##### Prepare proportion model matrix #####
+##### Prepare scale model matrix #####
     fixBLS <- FALSE
     if(isTRUE(all.equal(formulaLogScale, ~-1)) & observationType == 3)
         fixBLS <- TRUE
@@ -448,6 +449,7 @@ mlld <- function(## Data related
         identifyMatrix <- matrix(NA_integer_,0,2)
     }
 
+    lp_penalty <- rep(lp_penalty,length.out = 2)
     
 ##### Data for TMB #####
     dat <- list(model = observationType,
@@ -531,7 +533,7 @@ mlld <- function(## Data related
     }else if(observationType %in% c(3,4)){
         logSd <- numeric(2)
     }else{
-        logSd <- log(apply(dat$Y,1,sd))+2
+        logSd <- log(apply(dat$Y,1,sd, na.rm = TRUE))+2
     }
     
     
@@ -639,8 +641,9 @@ mlld <- function(## Data related
             blsMap[1,,] <- NA
         }else if(observationType == 2){ # For observationType == 2, it is used for dirichlet multinomial
             if(sameSNP2dm)
-                blsMap[,SNP2dm,] <- 1
+                blsMap[1,SNP2dm,] <- matrix(1:dim(blsMap)[3],sum(SNP2dm),dim(blsMap)[3], byrow=TRUE)
             blsMap[,!SNP2dm,] <- NA
+            #par$betaLogScale[1,,] <- log(10)
             par$betaLogScale[,!SNP2dm,] <- Inf
         }else if(observationType == 3){ # For observationType == 3, it is used to scale along the process
             blsMap[1,1,] <- NA
@@ -655,6 +658,11 @@ mlld <- function(## Data related
     if(all(is.na(map$commonMu))){
         map$logLambda <- factor(c(1,NA))
     }
+
+    map$logLambda <- factor(ifelse(is.na(lp_penalty),NA, map$logLambda))
+    if(!estimateLambda)
+        map$logLambda <- factor(par$logLambda*NA)        
+    
     if(!REML){
         if(all(is.na(lp_penalty))){
             map$logLambda <- factor(par$logLambda*NA)
@@ -712,9 +720,11 @@ mlld <- function(## Data related
                          lower = low,
                          upper = upp,
                          control = control)
-    opt$double_objective <- obj$env$f(obj$env$last.par.best, type="double")
-    rp <- obj$report(obj$env$last.par.best)
-
+    obj$fn(opt$par)
+    opt$double_objective <- obj$env$f(obj$env$last.par, type="double")
+    rp <- obj$report(obj$env$last.par)
+    if(is.null(colnames(y)))
+        colnames(y) <- 1:ncol(y)
     muNames <- list(rownames(dat$X),
                     colnames(y),
                     groupLevels[[1]])
@@ -729,22 +739,25 @@ mlld <- function(## Data related
 
     xlevels <- .getXlevels(terms(mf), mf)
     xlevelsCommon <- .getXlevels(terms(mfCommon), mfCommon)
+    xlevelsLogScale <- .getXlevels(terms(mfLogScale), mfLogScale)
     xlevelsTheta <- .getXlevels(terms(mfTheta), mfTheta)
     ## xlevelsDisp <- .getXlevels(terms(mfDisp), mfDisp)
 
     res <- list(call = cl,
                 terms = terms(mf),
                 termsCommon = terms(mfCommon),
+                termsLogScale = terms(mfLogScale),
                 termsTheta = terms(mfTheta),
                 ## termsDisp = terms(mfDisp),
                 xlevels = xlevels,
                 xlevelsCommon = xlevelsCommon,
+                xlevelsLogScale = xlevelsLogScale,
                 xlevelsTheta = xlevelsTheta,
                 ## xlevelsDisp = xlevelsDisp,
                 all_vars = colnames(get_all_vars(terms(mf), data)),
                 all_varsCommon = colnames(get_all_vars(terms(mfCommon), data)),
+                all_varsLogScale = colnames(get_all_vars(terms(mfLogScale), data)),
                 all_varsTheta = colnames(get_all_vars(terms(mfTheta), data)),
-                ## all_varsDisp = colnames(get_all_vars(terms(mfDisp), data)),
                 drop.unused.levels = drop.unused.levels,
 
                 opt = opt,

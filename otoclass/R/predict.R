@@ -200,20 +200,30 @@ getGroupDataFrame.mlld <- function(x,...){
     as.data.frame(lapply(seq_along(x$groupLevels), function(i) factor(x$groupLevels[[i]][x$group+1],x$groupLevels[[i]])))
 }
 
+logspace_add <- function(logx,logy){
+    pmax(logx, logy) + log1p(exp(-abs(logx - logy)))
+}
+logspace_sum <- function(logxs) Reduce(logspace_add,logxs)
+
+rePrior <- function(x, prior){
+    if(missing(prior) || is.null(prior))
+        return(x)
+    v <- x + log(prior)
+    v - apply(v,2,logspace_sum)[col(v)]
+}
 
 ##' @export
 predict.mlld <- function(x, y = NULL, data = NULL, group = NULL, proportionGroup = NULL, prior = NULL, se.fit = FALSE, ...){
+    pname <- ifelse(is.null(group), "posterior_logprobability_shape", "posterior_logprobability_all")
+    if(!is.null(prior)){
+        pname <- "posterior_logprobability_np"
+    }
     if(is.null(y)){ ## Use fitted data
         if(!is.null(data))
             message("data is ignored when y is not given.")
         rp <- x$rp
-        if(match("posterior_logprobability_shape",names(rp),FALSE)){
-            pname <- ifelse(is.null(group), "posterior_logprobability_shape", "posterior_logprobability_all")
-        }else{
-            pname <- "posterior_logprobability"
-        }
         rn<- rownames(x$y)
-        posterior <- t(exp(rp[[pname]]))
+        posterior <- t(exp(rePrior(rp[[pname]],prior)))
         fit <- aperm(rp$posterior_mean,c(2,1,3))
  
         if(se.fit){
@@ -223,6 +233,7 @@ predict.mlld <- function(x, y = NULL, data = NULL, group = NULL, proportionGroup
         }
 
     }else{
+        pname <- sprintf("pred_%s",pname)
         if(!is.matrix(y))
             if(is.vector(y)){
                 y <- matrix(y,ncol = 1)
@@ -235,38 +246,58 @@ predict.mlld <- function(x, y = NULL, data = NULL, group = NULL, proportionGroup
         if(is.null(data))
             data <- data.frame(ID = 1:nrow(y))
         dat$Y_pred <- t(y)
+
+##### Prepare model matrix #####
         dat$X_pred <- Matrix::sparse.model.matrix(x$terms,
                                                   data = data,
                                                   transpose = TRUE,
                                                   row.names = FALSE,
                                                   xlev = x$xlevels)
-        if(inherits(dat$X_pred,"dgCMatrix"))
-            dat$X_pred <- as(dat$X_pred,"dgTMatrix")
+        dat$X_pred <- as(dat$X_pred,"dgTMatrix")
+
+##### Prepare scale model matrix #####
         dat$XCom_pred <- Matrix::sparse.model.matrix(x$termsCommon,
                                                      data = data,
                                                      transpose = TRUE,
                                                      row.names = FALSE,
                                                      xlev = x$xlevelsCommon)
-        if(inherits(dat$XCom_pred,"dgCMatrix"))
-            dat$XCom_pred <- as(dat$XCom_pred,"dgTMatrix")
-        if(is.null(proportionGroup) & is.null(prior)){
-            proportionGroup_pred <- rep(levels(x$proportionGroup)[1],ncol(dat$Y_pred))
-        }else if(is.null(proportionGroup) & !is.null(prior)){
-            ## Change this to use a specified prior!!!
-            proportionGroup_pred <- rep(levels(x$proportionGroup)[1],ncol(dat$Y_pred))
-        }else{
-            proportionGroup_pred <- proportionGroup
-        }
-        proportionGroup_pred <- factor(proportionGroup_pred, levels = levels(x$proportionGroup))
-        if(any(is.na(proportionGroup_pred)))
-            stop("proportionGroup must match the levels from the fitted object")
+        dat$XCom_pred <- as(dat$XCom_pred,"dgTMatrix")
 
-        pgp <- as.integer(proportionGroup_pred)-1
-        attr(pgp,"levels") <- levels(x$proportionGroup)
-        dat$proportionGroup_pred <- pgp
+        dat$XLogScale_pred <- Matrix::sparse.model.matrix(x$termsLogScale,
+                                                     data = data,
+                                                     transpose = TRUE,
+                                                     row.names = FALSE,
+                                                     xlev = x$xlevelsLogScale)
+        dat$XLogScale_pred <- as(dat$XLogScale_pred,"dgTMatrix")
+
+ ##### Prepare proportion model matrix #####
+       dat$XTheta_pred <- Matrix::sparse.model.matrix(x$termsTheta,
+                                                       data = data,
+                                                       transpose = TRUE,
+                                                       row.names = FALSE,
+                                                       xlev = x$xlevelsTheta)
+        dat$XTheta_pred <- as(dat$XTheta_pred,"dgTMatrix")
+
+        ## HANDLE RANDOM EFFECTS!
+        
+        ## if(is.null(proportionGroup)){# & is.null(prior)){
+        ##     proportionGroup_pred <- rep(levels(x$proportionGroup)[1],ncol(dat$Y_pred))
+        ##     ## }else if(is.null(proportionGroup) & !is.null(prior)){
+        ##     ##     ## Change this to use a specified prior!!!
+        ##     ##     proportionGroup_pred <- rep(levels(x$proportionGroup)[1],ncol(dat$Y_pred))
+        ## }else{
+        ##     proportionGroup_pred <- proportionGroup
+        ## }
+        ## proportionGroup_pred <- factor(proportionGroup_pred, levels = levels(x$proportionGroup))
+        ## if(any(is.na(proportionGroup_pred)))
+        ##     stop("proportionGroup must match the levels from the fitted object")
+
+        ## pgp <- as.integer(proportionGroup_pred)-1
+        ## attr(pgp,"levels") <- levels(x$proportionGroup)
+        ## dat$proportionGroup_pred <- pgp
 
         if(is.null(group)){
-            dat$G_pred <- matrix(NA_integer_, ncol(dat$Y_pred), 0)
+            dat$G_pred <- matrix(NA_real_, ncol(dat$Y_pred), ncol(getGroupDataFrame(x)))
         }else{
             if(!is.factor(group) && !is.data.frame(group)){
                 group <- factor(group)
@@ -288,14 +319,13 @@ predict.mlld <- function(x, y = NULL, data = NULL, group = NULL, proportionGroup
             if(all(is.na(group)) || !isTRUE(all.equal(groupLevels, x$groupLevels)))
                 warning("group does not match the fitted group.")
         }
-        ##return(dat)
         obj <- TMB::MakeADFun(dat,x$pl,x$tmb_map,
                               silent = x$silent, random = x$tmb_random,
                               DLL = "otoclass")
         rp <- obj$report(obj$env$last.par)
         rn <- names(y)
 
-        posterior <- t(exp(rp[[pname]]))
+        posterior <- t(exp(rePrior(rp[[pname]],prior)))
         fit <- aperm(rp$pred_posterior_mean,c(2,1,3))
 
         if(se.fit){

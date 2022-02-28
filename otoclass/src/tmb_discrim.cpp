@@ -115,6 +115,7 @@ Type logspace_add_p (Type logx, Type logy, Type p) {
   return log((Type(1)-p)*exp(logy-logx)+p)+logx; // the order of x and y is taylored for this application 
 }
 
+// logdrobust can't handle NA, since x will be observation - prediction (i.e., include parameters)
 template<class Type>
 Type logdrobust(Type x, Type p, Type df){
   Type ld1=dnorm(x,Type(0.0),Type(1.0),true);
@@ -322,7 +323,7 @@ struct SNP2 : OBSERVATION_DENSITY<Type> {
       vector<Type> y = xx.col(i);
       if(sum(y) == 0){
 	r += 0.0;
-      }else if(CppAD::Variable(scale(i))){
+      }else if(R_finite(asDouble(scale(i)))){
 	r += ddirichletmultinom(y,logp,log(scale(i)),true);
       }else if(!R_finite(asDouble(scale(i)))){
 	r += dmultinom2(y,logp,true);
@@ -364,6 +365,8 @@ struct SPL_AR1 : OBSERVATION_DENSITY<Type> {
       if(i < x.size()-1 && isNA(x(i+1)) && !isNA(x(i))) // Last non-NA
 	i1 = i;
     }
+    if(i0 == 0 && isNA(x(0)))	// All is missing
+      return 0.0;
     return d0((vector<Type>)r.segment(i0, i1 - i0 + 1) / exp((vector<Type>)rs.segment(i0, i1 - i0 + 1))) + sum((vector<Type>)rs.segment(i0, i1 - i0 + 1)); 
   }
 };
@@ -378,7 +381,7 @@ struct FS1_AR1 : OBSERVATION_DENSITY<Type> {
   
   SCALE_t<AR1_t<N01<Type> > > d0;
 
-  
+  // Handle missing!
   
   FS1_AR1() : xv(0), Ne(0), basis(0,0) {};
   FS1_AR1(int N,
@@ -398,6 +401,8 @@ struct FS1_AR1 : OBSERVATION_DENSITY<Type> {
 
   Type operator()(vector<Type> x, vector<Type> mu, vector<Type> scale){
     vector<Type> r(x.size());
+    if(isNA(x(0)))		// Assuming all are missing
+      return(0.0);
     vector<Type> mv = basis * (vector<Type>)mu.segment(1,mu.size()-1);
     for(int i = 0; i < r.size(); ++i)
       r(i) = x(i) - mv(i) - mu(0);
@@ -417,6 +422,8 @@ struct SPL_CATEGORICAL : OBSERVATION_DENSITY<Type> {
 
   Type operator()(vector<Type> x, vector<Type> mu, vector<Type> scale){
     // x.size() == 1
+    if(isNA(x(0)))
+      return(0.0);
     int xi = CppAD::Integer(x(0));
     vector<Type> vv(Ncat-1);
     vv.setZero();
@@ -470,23 +477,48 @@ public:
     p1=p1_;
   }
   /** \brief Evaluate the negative log density */
-  Type operator()(vector<Type> x, vector<Type> mu, vector<Type> scale){
-    vector<Type> tmp = (x - mu) / scale;
-    vector<Type> z = inv_L_Sigma*tmp;
-    return -sum(logdrobust(z,p1,df))+halfLogDetS + sum(log(scale));
+  Type operator()(vector<Type> x){
+    // vector<Type> tmp = (x - mu) / scale;
+    vector<Type> z = inv_L_Sigma*x;
+    Type ldr = sum(logdrobust(z,p1,df));
+    Rprintf("\t\t\tz(0): %f - logdrobust: %f - halfLogDetS: %f\n",z(0),ldr,halfLogDetS);
+    return -sum(logdrobust(z,p1,df))+halfLogDetS;// + sum(log(scale));
   }
-  // Type operator()(vector<Type> x, vector<Type> keep){
-  //   matrix<Type> S = Sigma;
-  //   vector<Type> not_keep = Type(1.0) - keep;
-  //   for(int i = 0; i < S.rows(); i++){
-  //     for(int j = 0; j < S.cols(); j++){
-  // 	S(i,j) = S(i,j) * keep(i) * keep(j);
-  //     }
-  //     //S(i,i) += not_keep(i) * pow((Type(1)-p1)*sqrt(Type(0.5)/M_PI)+p1*(Type(1)/M_PI),2); //(t(1))
-  //     S(i,i) += not_keep(i) * pow((Type(1)-p1)*sqrt(Type(0.5)/M_PI)+p1*(Type(2)/(M_PI*sqrt(df))),2);
-  //   }
-  //   return MVMIX_t<Type>(S,p1)(x * keep);
-  // }
+  Type operator()(vector<Type> x, vector<Type> mu, vector<Type> scale){
+    vector<Type> keep(x.size());
+    keep.setConstant(1.0);
+    int hasNA = 0;
+    for(int i = 0; i < x.size(); ++i)
+      if(isNA(x(i))){
+	x(i) = 0.0;
+	keep(i) = 0.0;
+	hasNA++;
+      }
+    if(hasNA == 0){
+      Rprintf("\t\tNot NA\n");
+      vector<Type> tmp = (x - mu) / scale;
+      Type v1 = this->operator()(tmp);
+      Type v2 = sum(log(scale));
+      Rprintf("\t\ttmp(0): %f\n",tmp(0));
+      Rprintf("\t\tv1: %f\n",v1);
+      Rprintf("\t\tv2: %f\n",v2);
+      return v1+v2;
+    }
+    if(hasNA == x.size()){
+      return 0.0;
+    }
+
+    matrix<Type> S = Sigma;
+    vector<Type> not_keep = Type(1.0) - keep;
+    for(int i = 0; i < S.rows(); i++){
+      for(int j = 0; j < S.cols(); j++){
+  	S(i,j) = S(i,j) * keep(i) * keep(j);
+      }
+      //S(i,i) += not_keep(i) * pow((Type(1)-p1)*sqrt(Type(0.5)/M_PI)+p1*(Type(1)/M_PI),2); //(t(1))
+      S(i,i) += not_keep(i) * pow((Type(1)-p1(i))*sqrt(Type(0.5)/M_PI)+p1(i)*(Type(2)/(M_PI*sqrt(df(i)))),2);
+    }
+    return MVMIX_t<Type>(S,p1,df)(x * keep, mu, scale);
+  }
 
   vector<Type> simulate() {
     int siz = Sigma.rows();
@@ -672,7 +704,7 @@ Type objective_function<Type>::operator() () {
   DATA_STRUCT(ZCom, SparseMatrixList);
   DATA_STRUCT(ZTheta, SparseMatrixList);
   
-  DATA_INTEGER(penalty);
+  DATA_IVECTOR(penalty);
 
   DATA_ARRAY(Y_pred);
   DATA_IMATRIX(G_pred);
@@ -950,7 +982,7 @@ Type objective_function<Type>::operator() () {
     // Contribution from G
     // nll -= log(NormalizationConstant);
     // Contrbution from Y
-
+    Rprintf("Obs %d - nll before: %f\n",i, nll);
     for(int j = 0; j < Gnlevels(0); ++j){ // Loop over groups
       vector<Type> tmp = Y.col(i);
       vector<Type> tmpMean = (vector<Type>)(X.col(i).transpose() * muUse.col(j).matrix());
@@ -975,7 +1007,6 @@ Type objective_function<Type>::operator() () {
 	posterior_mean.col(j).col(i) = tmpMean;
       // P(Y | S)
       Type ld = -dist[j]->operator()(tmp,tmpMean,scale); // dist returns negative log-likelihood!
-
       // P(Y | S) * P(S)      
       Type ld2 = ld + logTh(j);
 
@@ -994,8 +1025,7 @@ Type objective_function<Type>::operator() () {
       lps = logspace_add2(lps,ld2);
       postProbNorm = logspace_add2(postProbNorm, posterior_logprobability_shape(j,i));
       postProbNormNP = logspace_add2(postProbNormNP, ld);
-
-	    
+      Rprintf("\tGrp %d - lps: %f - ld: %f - ld2: %f\n",j, lps, ld, ld2);    
     }
     for(int j = 0; j < Gnlevels(0); ++j){
       posterior_logprobability_shape(j,i) -= postProbNorm;
@@ -1008,16 +1038,20 @@ Type objective_function<Type>::operator() () {
   ////////////////////////////////////////////////////////////////////////////
   ///////////////////////////// Regularization ///////////////////////////////
   ////////////////////////////////////////////////////////////////////////////
-  if(penalty != 0){
+  if(penalty(0) != 0){
     for(int i = 0; i < mu.dim[0]; ++i)
       for(int j = 0; j < mu.dim[1]; ++j){
 	for(int k = 0; k < mu.dim[2]; ++k){
 
+	  // No penalty on intercept for first group
+	  if(k == 0 && i == 0)
+	    continue;
+	  
 	  Type sdp = 1.0;
 	  if(modelType == Model::MVMIX)
 	    sdp = sigma(j,k);
 	  
-	  switch(penalty){
+	  switch(penalty(0)){
 	  case -1:
 	    nll -= dt(mu(i,j,k) / lambda(0),Type(3.0),true) - log(lambda(0));
 	    break;
@@ -1028,10 +1062,12 @@ Type objective_function<Type>::operator() () {
 	    nll -= dnorm(mu(i,j,k),Type(0.0),lambda(0) * sdp, true);
 	    break;
 	  default:
-	    nll -= my_atomic::Lp(mu(i,j,k),(Type)penalty,lambda(0) * sdp);
+	    nll -= my_atomic::Lp(mu(i,j,k),(Type)penalty(0),lambda(0) * sdp);
 	  }
 	}
       }
+  }
+  if(penalty(1) != 0){
     vector<Type> sigmaMeans(commonMu.cols());
     sigmaMeans.setConstant(1.0);
     if(modelType == Model::MVMIX)
@@ -1039,7 +1075,7 @@ Type objective_function<Type>::operator() () {
     
     for(int i = 0; i < commonMu.rows(); ++i)
       for(int j = 0; j < commonMu.cols(); ++j){
-	switch(penalty){
+	switch(penalty(1)){
 	case -1:
 	  nll -= dt(commonMu(i,j) / lambda(1),Type(3.0),true) - log(lambda(1));
 	  break;
@@ -1050,7 +1086,7 @@ Type objective_function<Type>::operator() () {
 	  nll -= dnorm(commonMu(i,j),Type(0.0),lambda(1) * sigmaMeans(j), true);
 	  break;
 	default:
-	  nll -= my_atomic::Lp(commonMu(i,j),(Type)penalty,lambda(1) * sigmaMeans(j));
+	  nll -= my_atomic::Lp(commonMu(i,j),(Type)penalty(1),lambda(1) * sigmaMeans(j));
 	}
       }
   }
@@ -1102,23 +1138,20 @@ Type objective_function<Type>::operator() () {
     
   }else{
     array<Type> pred_posterior_mean(nFeatures, Y_pred.cols(), Gnlevels(0));
+    pred_posterior_mean.setZero();
     matrix<Type> pred_prior_logitprobability(Gnlevels(0), Y_pred.cols());
+    pred_prior_logitprobability.setZero();
     matrix<Type> pred_posterior_logprobability_shape(Gnlevels(0), Y_pred.cols());
+    pred_posterior_logprobability_shape.setZero();
     matrix<Type> pred_posterior_logprobability_all(Gnlevels(0), Y_pred.cols());
+    pred_posterior_logprobability_all.setZero();
     matrix<Type> pred_posterior_logprobability_np(Gnlevels(0), Y_pred.cols());
+    pred_posterior_logprobability_np.setZero();
   
     for(int i = 0; i < Y_pred.cols(); ++i){ // Loop over individuals
-      // vector<Type> th(thetaIn.rows()+1);
-      // th.setZero();
-      // if(isNA(dispersionGroup_pred(i))){
-      //   th = theta.col(proportionGroup_pred(i));
-      // }else{
-      //   for(int qq = 0; qq < thetaIn.rows(); ++qq)
-      // 	th(qq) = exp(thetaIn(qq,proportionGroup_pred(i)) + dispersion(qq,dispersionGroup_pred(i)));
-      //   th(th.size() - 1) = 1.0;
-      //   th /= th.sum();
-      // }
       vector<Type> thtmp(Gnlevels(0)-1);
+      thtmp.setZero();
+      
       for(int j = 0; j < thtmp.size(); ++j){
 	thtmp(j) = ((vector<Type>)XTheta_pred.col(i) * (vector<Type>)betaTheta.col(j)).sum();
       }
@@ -1128,13 +1161,12 @@ Type objective_function<Type>::operator() () {
       vector<Type> logTh = toLogProportion(thtmp);
       pred_prior_logitprobability.col(i) = log2logit(logTh);
     
-      Type postProbNorm_s = R_NegInf;
-      Type postProbNorm_a = R_NegInf;
-      Type postProbNorm_n = R_NegInf;
+      Type lps = R_NegInf;
+      Type postProbNorm = R_NegInf;
+      Type postProbNormNP = R_NegInf;
   
       for(int j = 0; j < Gnlevels(0); ++j){ // Loop over groups
-	vector<Type> tmp;
-	tmp = Y_pred.col(i);
+	vector<Type> tmp = Y_pred.col(i);
 	vector<Type> tmpMean = (vector<Type>)(X_pred.col(i).transpose() * muUse.col(j).matrix());
 	for(int zz = 0; zz < Z_pred.size(); ++zz){
 	  tmpMean += (vector<Type>)(Z_pred(zz).col(i).transpose() * U.col(zz).col(j).matrix());
@@ -1145,35 +1177,40 @@ Type objective_function<Type>::operator() () {
 	for(int zz = 0; zz < ZCom_pred.size(); ++zz){
 	  tmpMean += (vector<Type>)(ZCom_pred(zz).col(i).transpose() * UCom.col(zz));
 	}
-
 	vector<Type> scale(nFeatures);
 	scale.setConstant(1.0);
-	if(modelType == Model::MVMIX || modelType == Model::SNP2)
+	if(modelType == Model::MVMIX || modelType == Model::SNP2){
 	  scale = exp((vector<Type>)(XLogScale_pred.col(i).transpose() * betaLogScale.col(j).matrix()));
+	}else if(modelType == Model::SPL_AR1){
+	  scale = (vector<Type>)(XLogScale_pred.col(i).transpose() * betaLogScale.col(j).matrix());
+	}
 	// tmp -= tmpMean;
 	if(modelType != Model::SNP2)
 	  pred_posterior_mean.col(j).col(i) = tmpMean;
+	// P(Y | S)
+	Type ld = -dist[j]->operator()(tmp,tmpMean,scale); // dist returns negative log-likelihood!
+	// P(Y | S) * P(S)      
+	Type ld2 = ld + logTh(j);
 
-	Type ld =  dist[j]->operator()(tmp,tmpMean,scale);
-	Type ld2 = ld + logTh(j); 
 	// P(C_i | S)
 	for(int cc = 0; cc < G_pred.cols(); ++cc){
 	  if(!isNA(G_pred(i,cc))){
 	    matrix<Type> MvecUse = Mvec(cc) * Gconversion(cc); // Columns should sum to one
 	    ld2 += log(MvecUse(G_pred(i,cc),j));
-	  }      
+	  }
 	}
+      
 	pred_posterior_logprobability_shape(j,i) = ld + logTh(j);
 	pred_posterior_logprobability_all(j,i) = ld2;
 	pred_posterior_logprobability_np(j,i) = ld;
-	postProbNorm_s = logspace_add2(postProbNorm_s, pred_posterior_logprobability_shape(j,i));
-	postProbNorm_a = logspace_add2(postProbNorm_a, pred_posterior_logprobability_all(j,i));
-	postProbNorm_n = logspace_add2(postProbNorm_n, pred_posterior_logprobability_np(j,i));
+	lps = logspace_add2(lps,ld2);
+        postProbNorm = logspace_add2(postProbNorm, pred_posterior_logprobability_shape(j,i));
+	postProbNormNP = logspace_add2(postProbNormNP, ld);
       }
       for(int j = 0; j < Gnlevels(0); ++j){
-	pred_posterior_logprobability_shape(j,i) -= postProbNorm_s;
-	pred_posterior_logprobability_all(j,i) -= postProbNorm_a;
-	pred_posterior_logprobability_np(j,i) -= postProbNorm_n;      
+	pred_posterior_logprobability_shape(j,i) -= postProbNorm;
+	pred_posterior_logprobability_all(j,i) -= lps;
+	pred_posterior_logprobability_np(j,i) -= postProbNormNP;      
       }
     }
     REPORT(pred_posterior_mean);

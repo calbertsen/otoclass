@@ -37,7 +37,7 @@ mlld(
   observationType = c("MVMIX", "SNP1", "SNP2", "SPL_AR1", "FS1_AR1", "SPL_CATEGORICAL"),
   forceMeanIncrease = FALSE,
   fixZeroGradient = TRUE,
-  SNP2dm = TRUE,
+  SNP2dm = FALSE,
   sameSNP2dm = TRUE,
   SPLknots = NULL,
   Nefd = 5,

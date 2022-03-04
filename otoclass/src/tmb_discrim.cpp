@@ -1121,6 +1121,9 @@ Type objective_function<Type>::operator() () {
 	for(int j = 0; j < thtmp.size(); ++j){
 	  thtmp(j) = ((vector<Type>)XTheta_pred.col(i) * (vector<Type>)betaTheta.col(j)).sum();
 	}
+	for(int zz = 0; zz < ZTheta_pred.size(); ++zz){
+	  thtmp += (vector<Type>)(ZTheta_pred(zz).col(i).transpose() *  UTheta.col(zz));
+	}  
 	vector<Type> logTh = toLogProportion(thtmp);
 	GROUP_logitprobability.col(i) = log2logit(logTh);
       }

@@ -57,7 +57,7 @@ getGroupProportion <- function(f, data){
 ##' @rdname getGroupProportion
 ##' @method getGroupProportion mlld
 ##' @export
-getGroupProportion.mlld <- function(f, data){
+getGroupProportion.mlld <- function(f, data, randEff = TRUE){
     if(missing(data))
         data <- f$data
     tmb_data <- f$tmb_data
@@ -66,14 +66,40 @@ getGroupProportion.mlld <- function(f, data){
     tmb_random <- f$tmb_random
     tmb_profile <- f$tmb_profile
 
+    ## Handle fixed effects
+    
     tmb_data$XTheta_pred <- Matrix::sparse.model.matrix(f$termsTheta,
                                                    data = data,
                                                    transpose = TRUE,
                                                    row.names = FALSE,
                                                    xlev = f$xlevelsTheta)
-    if(inherits(tmb_data$XTheta_pred,"dgCMatrix"))
-        tmb_data$XTheta_pred <- as(tmb_data$XTheta_pred,"dgTMatrix")    
+    tmb_data$XTheta_pred <- as(tmb_data$XTheta_pred,"dgTMatrix")
 
+    ## Handle random effects
+    if(!is.null(lme4::findbars(formulaProportion)) & randEff){
+        mf <- model.frame(subbars(f$call$formulaProportion),f$data)
+        mf2 <- model.frame(terms(mf),data=data,xlev=.getXlevels(terms(mf), mf))
+        rtZT <- mkReTrms(findbars(ld2$call$formulaProportion),mf2,drop.unused.levels=FALSE)
+        ZT <- lapply(rtZT$Ztlist,function(xx){
+            as(xx,"dgTMatrix")
+        })
+        ## ZTnms <- rtZT$cnms
+        ## ZTrdim <- sapply(rtZT$cnms,length)
+        ## ZTcdim <- sapply(rtZT$flist,nlevels)
+        ## UT <- array(numeric(sum(ZTrdim * ZTcdim * (Ngroups-1))))
+        ## attr(UT,"rdim") <- as.integer(ZTrdim * ZTcdim)
+        ## attr(UT,"cdim") <- as.integer(rep(Ngroups-1, length(ZT)))
+        ## n <- ZTrdim * (ZTrdim - 1) / 2
+        ## UTcor <- array(0, dim = sum(n*(Ngroups-1)))
+        ## attr(UTcor,"rdim") <- as.integer(n)
+        ## attr(UTcor,"cdim") <- as.integer(rep(Ngroups-1, length(ZT)))
+        ## UTlogSd <- array(2, dim = sum(ZTrdim * (Ngroups-1)))
+        ## attr(UTlogSd,"rdim") <- as.integer(ZTrdim)
+        ## attr(UTlogSd,"cdim") <- as.integer(rep(Ngroups-1, length(ZT)))
+        tmb_data$ZTheta_pred <- ZT
+   }
+
+    
     obj <- TMB::MakeADFun(data = tmb_data,
                      parameters = tmb_par,
                      map = tmb_map,

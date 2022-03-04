@@ -210,7 +210,11 @@ backwardSelection.mlld <- function(f, prior = NULL, maxit = Inf, criterion = c("
     cl0$group <- cl0$group[trainIndex,,drop=FALSE]
     Selected <- c()
     Remain <- seq_len(ncol(cl0$y))
-    Accuracy <- -Inf
+    P0 <- predict(f,
+                  y = trY,
+                  data = trD,
+                  prior = prior)$class    
+    Accuracy <- cFun(trG[,1], P0)
     while(length(Remain) > 1 && length(Selected) <= maxit){
         cat("Removing feature:",length(Remain)+1,"\n")
         ## Try all the models
@@ -228,7 +232,7 @@ backwardSelection.mlld <- function(f, prior = NULL, maxit = Inf, criterion = c("
         ## Update
         if(any(v > tail(Accuracy,1))){
             cat("\t",sprintf("Criterion improved from %f to %f",tail(Accuracy,1),max(v)),"\n")
-            cat("\t",sprintf("Removing %s",f$muNames[[3]][Remain[which.max(v)]]),"\n")
+            cat("\t",sprintf("Removing %s",f$muNames[[2]][Remain[which.max(v)]]),"\n")
             Selected <- c(Selected, Remain[which.max(v)])
             Remain <- setdiff(Remain,Selected)
             Accuracy <- c(Accuracy,max(v))
@@ -236,7 +240,7 @@ backwardSelection.mlld <- function(f, prior = NULL, maxit = Inf, criterion = c("
             break;
         }
     }
-    list(Remaining = f$muNames[[3]][Remain],
+    list(Remaining = f$muNames[[2]][Remain],
          Removed = data.frame(Number = seq_along(Selected),
                               Selected = f$muNames[[2]][Selected],
                               Criterion = tail(Accuracy,-1),

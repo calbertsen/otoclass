@@ -7,7 +7,7 @@
 \usage{
 getGroupProportion(f, data)
 
-\method{getGroupProportion}{mlld}(f, data)
+\method{getGroupProportion}{mlld}(f, data, randEff = TRUE)
 }
 \arguments{
 \item{f}{}

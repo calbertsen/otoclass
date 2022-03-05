@@ -76,10 +76,10 @@ getGroupProportion.mlld <- function(f, data, randEff = TRUE){
     tmb_data$XTheta_pred <- as(tmb_data$XTheta_pred,"dgTMatrix")
 
     ## Handle random effects
-    if(!is.null(lme4::findbars(formulaProportion)) & randEff){
+    if(!is.null(lme4::findbars(f$call$formulaProportion)) & randEff){
         mf <- model.frame(subbars(f$call$formulaProportion),f$data)
         mf2 <- model.frame(terms(mf),data=data,xlev=.getXlevels(terms(mf), mf))
-        rtZT <- mkReTrms(findbars(ld2$call$formulaProportion),mf2,drop.unused.levels=FALSE)
+        rtZT <- mkReTrms(findbars(f$call$formulaProportion),mf2,drop.unused.levels=FALSE)
         ZT <- lapply(rtZT$Ztlist,function(xx){
             as(xx,"dgTMatrix")
         })

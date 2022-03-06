@@ -110,6 +110,97 @@ forwardSelection <- function(f, ...)
 
 
 ##' @export
+##' @method forwardSelection default
+forwardSelection.default <- function(y, data, group, prior = NULL, maxit = Inf, criterion = c("MCC","TA","BA"),testPct = 0.25, env, ...){
+    criterion <- match.arg(criterion)
+    if(criterion == "MCC"){
+        cFun <- metric_MatthewCorrelationCoefficient
+    }else if(criterion == "TA"){
+        cFun <- metric_totalAccuracy
+    }else if(criterion == "BA"){
+        cFun <- metric_balancedAccuracy
+    }else{
+        stop("Criteria not implemented")
+    }
+    cl0 <- do.call("call",c(name="mlld",list(...)))
+    if(missing(env))
+        env <- parent.frame(1L)
+
+    ## Group input
+    if(!is.factor(group) && !is.data.frame(group)){
+        group <- factor(group)
+    }
+    if(is.data.frame(group)){
+        gisf <- sapply(group, is.factor)
+        if(any(!gisf)){
+            for(i in which(gisf))
+                group[[i]] <- factor(group[[i]])
+        }
+    }else{
+        group <- data.frame(G = group)
+    }
+    cl0$group <- group
+
+    if((!is.matrix(y) && !is.data.frame(y)))
+        stop("y should be a matrix or a data.frame")
+    if(ncol(y) <= 1)
+        stop("Not enough features to select")
+    if(is.null(colnames(y)))
+        colnames(y) <- paste0("Feature_",seq_len(ncol(y)))
+    cl0$y <- y
+    cl0$data <- data
+    if(is.null(cl0$doSdreport))
+        cl0$doSdreport <- FALSE
+    if(is.null(cl0$estimateLambda))
+        cl0$estimateLambda <- FALSE
+    if(is.null(cl0$lp_penalty))
+        cl0$lp_penalty <- NA
+    
+    testIndex <- sort(unlist(lapply(split(seq_len(nrow(cl0$y)), cl0$group[,1]), function(ii) sample(ii,testPct * length(ii)))))
+    trainIndex <- setdiff(seq_len(nrow(cl0$y)), testIndex)
+    trY <- cl0$y[testIndex,,drop=FALSE]
+    trD <- cl0$data[testIndex,,drop=FALSE]
+    trG <- cl0$group[testIndex,,drop=FALSE]
+    cl0$y <- cl0$y[trainIndex,,drop=FALSE]
+    cl0$data <- cl0$data[trainIndex,,drop=FALSE]
+    cl0$group <- cl0$group[trainIndex,,drop=FALSE]
+    Selected <- c()
+    Remain <- seq_len(ncol(cl0$y))
+    Accuracy <- -Inf
+    while(length(Remain) > 0 && length(Selected) <= maxit){
+        cat("Selecting feature:",length(Selected)+1,"\n")
+        ## Try all the models
+        v <- sapply(Remain, function(inext){
+            cl <- cl0
+            cl$y <- cl0$y[, c(Selected, inext), drop=FALSE]
+            suppressWarnings(oo <- capture.output(fi <- eval(cl,env)))
+            P <- predict(fi,
+                         y = trY[,c(Selected, inext),drop=FALSE],
+                         data = trD,
+                         prior = prior)$class
+            cFun(trG[,1], P)
+        })        
+        v[is.nan(v) | is.na(v) | !is.finite(v)] <- -Inf
+        ## Update
+        if(any(v > tail(Accuracy,1))){
+            cat("\t",sprintf("Criterion improved from %f to %f",tail(Accuracy,1),max(v)),"\n")
+            cat("\t",sprintf("Selecting %s",colnames(y)[Remain[which.max(v)]]),"\n")
+            Selected <- c(Selected, Remain[which.max(v)])
+            Remain <- setdiff(Remain,Selected)
+            Accuracy <- c(Accuracy,max(v))
+        }else{
+            break;
+        }
+    }
+    data.frame(Number = seq_along(Selected),
+               Selected = colnames(y)[Selected],
+               Criterion = tail(Accuracy,-1),
+               FeatureIndex = Selected)
+}
+
+
+## Reduce to call default method!
+##' @export
 forwardSelection.mlld <- function(f, prior = NULL, maxit = Inf, criterion = c("MCC","TA","BA"),testPct = 0.25){
     criterion <- match.arg(criterion)
     if(criterion == "MCC"){

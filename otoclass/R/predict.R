@@ -53,7 +53,6 @@ getGroupProportion <- function(f, data){
     UseMethod("getGroupProportion")
 }
 
-
 ##' @rdname getGroupProportion
 ##' @method getGroupProportion mlld
 ##' @export
@@ -74,12 +73,27 @@ getGroupProportion.mlld <- function(f, data, randEff = TRUE){
                                                    row.names = FALSE,
                                                    xlev = f$xlevelsTheta)
     tmb_data$XTheta_pred <- as(tmb_data$XTheta_pred,"dgTMatrix")
-
+    require(lme4)
     ## Handle random effects
     if(!is.null(lme4::findbars(f$call$formulaProportion)) & randEff){
-        mf <- model.frame(subbars(f$call$formulaProportion),f$data)
-        mf2 <- model.frame(terms(mf),data=data,xlev=.getXlevels(terms(mf), mf))
+        mf <- model.frame(lme4::subbars(f$call$formulaProportion),f$data)
+        xlvs <- .getXlevels(terms(mf), mf)
+        dataSafe <- data
+        xNA <- lapply(dataSafe[names(xlvs)], is.na)
+        for(nn in names(xNA))
+            dataSafe[[nn]][xNA[[nn]]] <- xlvs[[nn]][1]
+        mf2 <- model.frame(terms(mf),data=dataSafe,xlev=.getXlevels(terms(mf), mf),na.action=na.pass)
         rtZT <- mkReTrms(findbars(f$call$formulaProportion),mf2,drop.unused.levels=FALSE)
+        ZT <- rtZT$Ztlist
+        grpnames <- strsplit(gsub(".+\\| ","",names(rtZT$Ztlist)), ":")
+        for(ii in seq_along(grpnames)){
+            jj <- na.omit(match(grpnames[[ii]],names(xNA)))
+            if(length(jj) == 0)
+                next;
+            kk <- apply(do.call("cbind",xNA[jj]),1,any)
+            if(sum(kk) > 0)
+                ZT[[ii]][,kk] <- 0
+        }    
         ZT <- lapply(rtZT$Ztlist,function(xx){
             as(xx,"dgTMatrix")
         })

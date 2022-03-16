@@ -223,8 +223,8 @@ mlld <- function(## Data related
                             check.nlev.gtr.1 = "ignore",
                             check.nobs.vs.nRE= "ignore",
                             check.rankX = "ignore",
-         check.scaleX = "ignore",
-         check.formula.LHS = "ignore")
+                            check.scaleX = "ignore",
+                            check.formula.LHS = "ignore")
     
     if(is.null(data) & identical(formula,~1) & identical(formulaCommon, ~1))
         data <- data.frame(ID = 1:nObs)

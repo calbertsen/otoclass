@@ -49,15 +49,16 @@ getProportion <- function(f, data, indx){
 ##' @return 
 ##' @author Christoffer Moesgaard Albertsen
 ##' @export
-getGroupProportion <- function(f, data){
+getGroupProportion <- function(f, data,...){
     UseMethod("getGroupProportion")
 }
 
 ##' @rdname getGroupProportion
 ##' @method getGroupProportion mlld
 ##' @export
-getGroupProportion.mlld <- function(f, data, randEff = TRUE){
-    if(missing(data))
+getGroupProportion.mlld <- function(f, data, randEff = TRUE,...){
+    require(lme4)
+   if(missing(data))
         data <- f$data
     tmb_data <- f$tmb_data
     tmb_par <- f$pl
@@ -73,8 +74,7 @@ getGroupProportion.mlld <- function(f, data, randEff = TRUE){
                                                    row.names = FALSE,
                                                    xlev = f$xlevelsTheta)
     tmb_data$XTheta_pred <- as(tmb_data$XTheta_pred,"dgTMatrix")
-    require(lme4)
-    ## Handle random effects
+     ## Handle random effects
     if(!is.null(lme4::findbars(f$call$formulaProportion)) & randEff){
         mf <- model.frame(lme4::subbars(f$call$formulaProportion),f$data)
         xlvs <- .getXlevels(terms(mf), mf)
@@ -84,17 +84,17 @@ getGroupProportion.mlld <- function(f, data, randEff = TRUE){
             dataSafe[[nn]][xNA[[nn]]] <- xlvs[[nn]][1]
         mf2 <- model.frame(terms(mf),data=dataSafe,xlev=.getXlevels(terms(mf), mf),na.action=na.pass)
         rtZT <- mkReTrms(findbars(f$call$formulaProportion),mf2,drop.unused.levels=FALSE)
-        ZT <- rtZT$Ztlist
-        grpnames <- strsplit(gsub(".+\\| ","",names(rtZT$Ztlist)), ":")
+        ZTtmp <- rtZT$Ztlist
+        grpnames <- strsplit(gsub(".+\\| ","",names(ZTtmp)), ":")
         for(ii in seq_along(grpnames)){
             jj <- na.omit(match(grpnames[[ii]],names(xNA)))
             if(length(jj) == 0)
                 next;
             kk <- apply(do.call("cbind",xNA[jj]),1,any)
             if(sum(kk) > 0)
-                ZT[[ii]][,kk] <- 0
+                ZTtmp[[ii]][,kk] <- 0
         }    
-        ZT <- lapply(rtZT$Ztlist,function(xx){
+        ZT <- lapply(ZTtmp,function(xx){
             as(xx,"dgTMatrix")
         })
         ## ZTnms <- rtZT$cnms
@@ -146,7 +146,7 @@ getGroupProportion.mlld <- function(f, data, randEff = TRUE){
 ##' @return 
 ##' @author Christoffer Moesgaard Albertsen
 ##' @export
-getGroupMeans <- function(f, data){
+getGroupMeans <- function(f, data, ...){
     UseMethod("getGroupMeans")
 }
 
@@ -154,7 +154,8 @@ getGroupMeans <- function(f, data){
 ##' @rdname getGroupMeans
 ##' @method getGroupMeans mlld
 ##' @export
-getGroupMeans.mlld <- function(f, data, keep.cov = FALSE){
+getGroupMeans.mlld <- function(f, data, keep.cov = FALSE, ...){
+    require(lme4)
     if(missing(data))
         data <- f$data
     tmb_data <- f$tmb_data

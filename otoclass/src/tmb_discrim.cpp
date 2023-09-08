@@ -18,6 +18,8 @@
 #include "../inst/include/pnorm.hpp"
 #include "../inst/include/spline.hpp"
 
+#define ASSERT(x,msg) if(!(x)) Rf_error(msg);
+
 using namespace density;
 using Eigen::SparseMatrix;
 
@@ -223,8 +225,7 @@ vector<Type> toLogProportion(vector<Type> x){
 
 template<class Type>
 matrix<Type> naiveReshape(matrix<Type> x, int r, int c){
-  if(x.size() != r * c)
-    Rf_error("Wrong size in naiveReshape");
+  ASSERT(x.size() == r * c,"Wrong size in naiveReshape");
   matrix<Type> y(r,c);
   for(int i = 0; i < x.size(); ++i)
     y(i) = x(i);
@@ -743,11 +744,24 @@ Type objective_function<Type>::operator() () {
   PARAMETER_MATRIX(tmixpIn);
   PARAMETER_MATRIX(logDf);
 
+  PARAMETER_VECTOR(missing);
+
+  if(missing.size() > 0){
+    int indx = 0; 
+    for(int i = 0; i < Y.size(); ++i){
+      if(isNA(Y[i])){
+	ASSERT(i < missing.size(), "Wrong number of missing random effects");
+        Y[i]=missing(indx++);
+      }    
+    }
+  }
+
+  REPORT(Y);
+
   ////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////// Check //////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////
-  if(G.rows() != Y.cols())
-    Rf_error("Wrong input length. G and Y must match");
+  ASSERT(G.rows() == Y.cols(),"Wrong input length. G and Y must match");
 
   ////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////// Prepare /////////////////////////////////

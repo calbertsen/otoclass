@@ -9,7 +9,7 @@ normalize_image(
   n,
   datCompare = NULL,
   forceFlip = FALSE,
-  flipByPosition = c("No", "Left", "Right")
+  flipByPosition = c("No", "Left", "Right", startByPolar = FALSE)
 )
 }
 \arguments{

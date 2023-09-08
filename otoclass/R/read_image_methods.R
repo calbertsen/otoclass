@@ -41,8 +41,8 @@ print.otolith_image <- function(x, ...){
 plot.otolith_image <- function(x,asUsed = FALSE, ...){
     pic <- getPixelMatrix(attr(x,"File"))
     if(asUsed){
-        args <- c(list(pic = pic), attr(x,"Transformation"))
-        pic <- do.call(transformPixelMatrix, args)
+        args <- c(list(pic = t(pic)), attr(x,"Transformation"))
+        pic <- t(do.call(transformPixelMatrix, args))
     }
     #graphics::par(mar = c(0,0,0,0), oma = c(0,0,0,0))
     graphics::plot(0,0,xlim=c(1,ncol(pic)),ylim=c(1,nrow(pic)),asp=1, type = "n", axes = FALSE,
@@ -67,8 +67,8 @@ plot.otolith_image <- function(x,asUsed = FALSE, ...){
 plot.otolith_contour <- function(x,asUsed = FALSE, ...){
     pic <- getPixelMatrix(attr(x,"File"))
     if(asUsed){
-        args <- c(list(pic = pic), attr(x,"Transformation"))
-        pic <- do.call(transformPixelMatrix, args)
+        args <- c(list(pic = t(pic)), attr(x,"Transformation"))
+        pic <- t(do.call(transformPixelMatrix, args))
     }
     ##graphics::par(mar = c(0,0,0,0), oma = c(0,0,0,0))
     graphics::plot(0,0,xlim=c(1,ncol(pic)),ylim=c(1,nrow(pic)),

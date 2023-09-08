@@ -75,6 +75,7 @@ mlld <- function(## Data related
                  lower = list(),
                  upper = list(),
                  guessStartingValues = TRUE,
+                 imputeMissing = FALSE,
                  ...){
     
     cl <- match.call()
@@ -240,7 +241,7 @@ mlld <- function(## Data related
                                      row.names = FALSE,
                                      drop.unused.levels = drop.unused.levels)
     ## if(!inherits(X,"dgTMatrix"))
-    X <- as(X,"dgTMatrix")    
+    X <- as(X,"TsparseMatrix")    
 
     if(is.null(lme4::findbars(formula))){
         Z <- list()
@@ -257,7 +258,7 @@ mlld <- function(## Data related
     }else{
         rtZ <- lme4::lFormula(formula,data, na.action = na.pass, control = lc)$reTrms
         Z <- lapply(rtZ$Ztlist,function(xx){
-            as(xx,"dgTMatrix")
+            as(xx,"TsparseMatrix")
         })       
         Znms <- rtZ$cnms
         Zrdim <- sapply(rtZ$cnms,length)
@@ -287,7 +288,7 @@ mlld <- function(## Data related
                                         row.names = FALSE,
                                         drop.unused.levels = drop.unused.levels)
     ## if(!inherits(XCom,"dgTMatrix"))
-    XCom <- as(XCom,"dgTMatrix")
+    XCom <- as(XCom,"TsparseMatrix")
 
     if(is.null(lme4::findbars(formulaCommon))){
         ZCom <- list()
@@ -303,7 +304,7 @@ mlld <- function(## Data related
    }else{
         rtZC <- lme4::lFormula(formulaCommon,data, na.action = na.pass, control = lc)$reTrms
         ZCom <- lapply(rtZC$Ztlist,function(xx){
-            as(xx,"dgTMatrix")
+            as(xx,"TsparseMatrix")
         })
         ZCnms <- rtZC$cnms
         ZCrdim <- sapply(rtZC$cnms,length)
@@ -334,7 +335,7 @@ mlld <- function(## Data related
                                         row.names = FALSE,
                                         drop.unused.levels = drop.unused.levels)
     ## if(!inherits(XLogScale,"dgTMatrix"))
-    XLogScale <- as(XLogScale,"dgTMatrix")
+    XLogScale <- as(XLogScale,"TsparseMatrix")
 
     if(!is.null(lme4::findbars(formulaLogScale)))
         warning("formulaLogScale does not allow random effets. Random effect terms were removed.")
@@ -348,7 +349,7 @@ mlld <- function(## Data related
                                         row.names = FALSE,
                                         drop.unused.levels = drop.unused.levels)
     ## if(!inherits(XTheta,"dgTMatrix"))
-    XTheta <- as(XTheta,"dgTMatrix")
+    XTheta <- as(XTheta,"TsparseMatrix")
 
     if(is.null(lme4::findbars(formulaProportion))){
         ZT <- list()
@@ -365,7 +366,7 @@ mlld <- function(## Data related
     }else{
         rtZT <- lme4::lFormula(formulaProportion,data, na.action = na.pass, control = lc)$reTrms
         ZT <- lapply(rtZT$Ztlist,function(xx){
-            as(xx,"dgTMatrix")
+            as(xx,"TsparseMatrix")
         })
         ZTnms <- rtZT$cnms
         ZTrdim <- sapply(rtZT$cnms,length)
@@ -470,10 +471,10 @@ mlld <- function(## Data related
                 penalty = ifelse(is.na(lp_penalty),0,lp_penalty),
                 Y_pred = array(0,dim=c(0,0)),
                 G_pred = matrix(0L, 0, 0),
-                X_pred = as(matrix(0,0,0),"dgTMatrix"),
-                XCom_pred = as(matrix(0,0,0),"dgTMatrix"),
-                XLogScale_pred = as(matrix(0,0,0),"dgTMatrix"),
-                XTheta_pred = as(matrix(0,0,0),"dgTMatrix"),
+                X_pred = as(matrix(0,0,0),"TsparseMatrix"),
+                XCom_pred = as(matrix(0,0,0),"TsparseMatrix"),
+                XLogScale_pred = as(matrix(0,0,0),"TsparseMatrix"),
+                XTheta_pred = as(matrix(0,0,0),"TsparseMatrix"),
                 Z_pred = list(),
                 ZCom_pred = list(),
                 ZTheta_pred = list(),
@@ -561,7 +562,8 @@ mlld <- function(## Data related
                 ##                  nlevels(proportionGroup)),
                 MIn = MInCMOE,
                 tmixpIn = matrix(qlogis(tMixture+0.01*as.numeric(estimateTMix)), n, dat$Gnlevels[1]),
-                logDf = matrix(log(tDf), n, dat$Gnlevels[1])
+                logDf = matrix(log(tDf), n, dat$Gnlevels[1]),
+                missing = numeric(as.numeric(imputeMissing) * sum(is.na(dat$Y)))
                 )
 
     if(!is.null(cl$parlist)){
@@ -685,7 +687,7 @@ mlld <- function(## Data related
 ##### Make TMB object #####
     obj <- TMB::MakeADFun(dat,par,map,
                           silent = silent, profile = rnd,
-                          random = RE,
+                          random = c(RE,"missing"),
                           DLL = "otoclass")
 
     if(fixZeroGradient && any((ogr <- obj$gr()) == 0)){

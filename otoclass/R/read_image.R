@@ -55,12 +55,16 @@ rotate_image <- function(dat){
     return(datOut)
 }
 
-newStart_image <- function(dat){
+newStart_image <- function(dat, polar = FALSE){
     isClosed <- isTRUE(all.equal(dat[1,],dat[nrow(dat),]))
     if(isClosed)
         dat <- dat[-nrow(dat),]
     ldat <- nrow(dat)
-    newBegin <- which.max(dat[,1])
+    if(polar){
+        newBegin <- which.min(Arg(complex(re=dat[,1],im=dat[,2])))
+    }else{
+        newBegin <- which.max(dat[,1])
+    }
     if(newBegin == 1){
         datNew <- dat
     }else{
@@ -74,20 +78,22 @@ newStart_image <- function(dat){
         datNew <- rbind(datNew,datNew[1,])
     }
     attrs <- attributes(dat)
-    attrs[names(attributes(datNew))] <- attributes(datNew)
+    aN <- attributes(datNew)
+    attrs[intersect(names(aN),names(attrs))] <- attributes(datNew)[intersect(names(aN),names(attrs))]
     attributes(datNew) <- attrs
     return(datNew)
 }
 
 flip_image <- function(dat,datCompare,forceFlip=FALSE, coord = 2){
-    # Both dat and datCompare must be preprocessed
+                                        # Both dat and datCompare must be preprocessed
+    attri <- attributes(dat)
     dat1 <- dat
     dat2 <- dat
     mid <- mean(range(dat2[,coord]))
     dat2[,coord] <- mid - (dat2[,coord] - mid)
     dat2 <-  newStart_image(dat2)
-    attr(dat2,"Flipped")[coord] <- !attr(dat2,"Flipped")[coord]
-
+    attri$Flipped[coord] <- attri$Flipped[coord]
+    attributes(dat2) <- attri
     if(forceFlip)
         return(dat2)
     
@@ -96,7 +102,7 @@ flip_image <- function(dat,datCompare,forceFlip=FALSE, coord = 2){
     datComptmp <- setNumObs_image(datCompare,1000)
     mse1 <- mean((dat1tmp-datComptmp)^2)
     mse2 <- mean((dat2tmp-datComptmp)^2)
-   
+    
     if(mse1 <= mse2){
         return(dat1)
     }else{
@@ -107,6 +113,8 @@ flip_image <- function(dat,datCompare,forceFlip=FALSE, coord = 2){
 LineLength <- function(v1,v2){
     sqrt(sum((v1-v2)^2))
 }
+
+
 ##' Get a pixel matrix from an image file
 ##'
 ##' @param file Path to image file
@@ -146,6 +154,79 @@ extendPic <- function(pic, kernelSize){
     pic
 }
 
+whiteBalance <- function(pic, pct = 0.00025){
+    rng <- quantile(pic,c(pct,1-pct))
+    newPic <- (pic - rng[1]) * 255 / diff(rng)
+    newPic[newPic < 0] <- 0
+    newPic[newPic > 255] <- 255
+    newPic
+}
+
+bruteCutCol <- function(pic, pct = 0.05){
+    cm <- apply(pic,2,max) #colMeans(pic)
+    rm <- apply(pic,1,max) #rowMeans(pic)
+    cutValC <- quantile(cm[seq(floor(ncol(pic)/2 -  ncol(pic)*pct),
+                               ceiling(ncol(pic)/2 +  ncol(pic)*pct), 1)],0.75)
+     ## Cut columns
+    pic[,cm < cutValC] <- 0
+    ii <- which(cm >= cutValC)
+    iChunks <- split(ii, cumsum(c(0,diff(ii)>1)))
+    iCL <- sapply(iChunks,length)
+    pic[,unlist(iChunks[iCL < min(tail(sort(iCL),2))])] <- 0
+    ## Cut rows
+    pic[rm < cutValC,] <- 0
+    ii <- which(rm >= cutValC)
+    iChunks <- split(ii, cumsum(c(0,diff(ii)>1)))
+    iCL <- sapply(iChunks,length)
+    pic[unlist(iChunks[iCL < min(tail(sort(iCL),1))]),] <- 0
+    #pic[pic < 0.5 * cutValC] <- 0
+    pic
+}
+
+histogramEqualization <- function(pic){
+    pn <- table(factor(pic,0:255)) / length(pic)
+    Pn <- cumsum(pn)
+    newPic <- matrix(floor(255 * Pn[pic+1]), nrow(pic), ncol(pic))
+    newPic
+}
+
+blending <- function(pic, alpha, FUN = histogramEqualization, ...){
+    FUN(pic,...) * alpha + (1 - alpha) * pic
+}
+
+histogramCut <- function(pic, alpha){
+    pic[pic < quantile(pic,alpha)] <- 0
+    pic
+}
+
+contrastLimitedHistogramEqualization <- function(pic, C = 10){
+    pn0 <- table(factor(pic,0:255)) / length(pic)
+    ## Find actual clipping limit
+    C <- 100
+    pn0N <- pn0 * length(pic)
+    CN <- C * mean(pn0N) 
+    top <- CN 
+    bottom <- 0
+    while(top - bottom > 1){
+        middle <- (top + bottom) / 2
+        excess <- (pn0N - middle) * as.numeric(pn0N > middle)
+        S <- sum(excess)
+        if(S > (CN-middle) * 256){
+            top <- middle
+        }else{
+            bottom <- middle
+        }
+    }
+    ## Clip
+    pn <- pmin(pn0N + 1, bottom)
+    ## Re-normalize
+    pn <- pn / sum(pn)
+    ## Equalize
+    Pn <- cumsum(pn)
+    newPic <- matrix(floor(255 * Pn[pic+1]), nrow(pic), ncol(pic))
+    newPic
+}
+
 ##' @importFrom stats plogis
 transformPixelMatrix <- function(pic,
                                  transformations = character(0),
@@ -153,10 +234,13 @@ transformPixelMatrix <- function(pic,
                                  logisticTransformScale = 1,
                                  gaussianBlurSize = 3,
                                  gaussianBlurSigma = 1,
-                                 floodFillTolerance = 0.1) {
+                                 floodFillTolerance = 0.1,
+                                 floodFillCol = 0,
+                                 whiteBalance = 0.25,
+                                 alpha = 0.4) {
     if(length(transformations) == 0)
         return(pic)
-    tIndx <- pmatch(transformations, c("logistic","gaussianBlur","unsharp","floodFill","sobel","edgeDetect","centerFloodFill"), duplicates.ok = TRUE)
+    tIndx <- pmatch(transformations, c("logistic","gaussianBlur","unsharp","floodFill","sobel","edgeDetect","centerFloodFill","whiteBalance","histogramEqualization","histogramCut","bruteCutCol","medianfilter","meanfilter"), duplicates.ok = TRUE)
     ## Size of input
     resizeInput <- function(y,i){
         xx <- rep(NA, length(tIndx))
@@ -165,9 +249,12 @@ transformPixelMatrix <- function(pic,
     }
     logisticTransformLocation = resizeInput(logisticTransformLocation,1)
     logisticTransformScale = resizeInput(logisticTransformScale,1)
-    gaussianBlurSize = resizeInput(gaussianBlurSize, c(2,3))
+    gaussianBlurSize = resizeInput(gaussianBlurSize, c(2,3,12,13))
     gaussianBlurSigma = resizeInput(gaussianBlurSigma, c(2,3))
     floodFillTolerance = resizeInput(floodFillTolerance, c(4,7))
+    whiteBalance = resizeInput(whiteBalance, c(8))
+    alpha = resizeInput(alpha, c(10,11))
+    floodFillCol = resizeInput(floodFillCol, c(4,7))
     
     for(ii in seq_along(tIndx)){
         vv <- tIndx[ii]
@@ -183,16 +270,28 @@ transformPixelMatrix <- function(pic,
             pic[pic < 0] <- 0
             pic[pic > 255] <- 255
         }else if(vv == 4){ ## Flood fill
-            pic <- floodfill(pic, floodFillTolerance[ii])
+            pic <- floodfill(pic, floodFillTolerance[ii], 0, 0, TRUE, floodFillCol[ii])
         }else if(vv == 5){ ## Sobel           
             pic <- to01(sobel(extendPic(pic,3))) * 255
         }else if(vv == 6){ ## edgeDetect
             pic <- to01(edge_detect(extendPic(pic,3))) * 255
         }else if(vv == 7){ ## Center flood fill
-            pic <- floodfill(otoclass:::to01(pic)*255, floodFillTolerance[ii], ncol(pic)/2, nrow(pic)/2, TRUE, 255)
+            pic <- floodfill(to01(pic)*255, floodFillTolerance[ii], ncol(pic)/2, nrow(pic)/2, TRUE, floodFillCol[ii])
+        }else if(vv == 8){ ## white balance
+            pic <- whiteBalance(to01(pic)*255, whiteBalance[ii])
+        }else if(vv == 9){ ## histogram equalization
+            pic <- histogramEqualization(to01(pic)*255)
+        }else if(vv == 10){ ## histogram cut
+            pic <- histogramCut(to01(pic)*255, alpha[ii])
+        }else if(vv == 11){ ## Brute cut columns
+            pic <- t(bruteCutCol(to01(t(pic))*255, alpha[ii]))
+        }else if(vv == 12){
+            pic <- medianfilter(pic, gaussianBlurSize[ii])
+        }else if(vv == 13){
+            pic <- meanfilter(extendPic(pic,gaussianBlurSize[ii]), gaussianBlurSize[ii])
         }
     }
-    return(pic)
+    return(round(pic))
 }
 
 ##' Read Otolith Images and Extract Contours
@@ -226,6 +325,9 @@ read_image<- function(file,
                       minPixelDiff = 0.05 * min(nc,nr),
                       extreme = TRUE,
                       floodFillTolerance = 0.1,
+                      floodFillCol = 0,
+                      whiteBalance = 0.4,
+                      histogramAlpha = 0.4,
                       borderBasedCutOff = FALSE,
                       transformations = character(0),
                       logisticTransformLocation = c("mean","median","borderMean","borderMedian"),
@@ -234,6 +336,7 @@ read_image<- function(file,
                       gaussianBlurSigma = gaussianBlurSize / 10,
                       pixelwise = FALSE,
                       assignSinglesByPosition = TRUE,
+                      forceCenter = FALSE,
                       minCountScale = 0,
                       minCountForMax = 1e-4,
                       reduceCutOffPercent = 0,
@@ -267,7 +370,10 @@ read_image<- function(file,
                                logisticTransformScale = logisticTransformScale,
                                gaussianBlurSize = gaussianBlurSize,
                                gaussianBlurSigma = gaussianBlurSigma,
-                               floodFillTolerance = floodFillTolerance)
+                               floodFillTolerance = floodFillTolerance,
+                               whiteBalance = whiteBalance,
+                               alpha = histogramAlpha,
+                               floodFillCol = floodFillCol)
    
     maxrv <- max(rv)
 
@@ -288,9 +394,13 @@ read_image<- function(file,
             i1 <- i1 - (i1 - m1) * reduceCutOffPercent
         }
         noiseFactor <- maxrv / i1 
-    }        
-    rv[rv< maxrv/noiseFactor] <- 0
-    cutVal <- maxrv/noiseFactor
+    }
+    if(!is.na(noiseFactor)){
+        rv[rv< maxrv/noiseFactor] <- 0
+        cutVal <- maxrv/noiseFactor
+    }else{
+        cutVal <- NA
+    }
     
     if(extreme)
         rv[rv > 0] <- 255
@@ -321,11 +431,16 @@ read_image<- function(file,
         km <- stats::kmeans(mrval[mrval[,3]>0,1:2],nclust)
         
     }else{
-        km <- list(cluster = rep(1,length(rv[rv>0])))
+        km <- list(cluster = factor(rep(1,length(rv[rv>0]))),
+                   centers = matrix(c(nr/2,nc/2),2,1))
         nclust <- 1
     }
     km$cluster <- factor(km$cluster)
-    levels(km$cluster) <- c("Left","Right")[order(km$centers[,orderIndx])]
+    if(onlyOne){
+        levels(km$cluster) <- c("Unknown")
+    }else{
+        levels(km$cluster) <- c("Left","Right")[order(km$centers[,orderIndx])]
+    }
     if(assignSinglesByPosition & nclust == 1){
         if(km$centers[1,1] < nr/2){
             levels(km$cluster) <- c("Left")
@@ -342,18 +457,33 @@ read_image<- function(file,
     res <- list()
     for(i in 1:nlevels(km$cluster)){
         rv3 <- rv
-        rv3[rv3>0][as.integer(km$cluster) != i] <- 0
+        rv3[rv3>0][as.integer(km$cluster) != i] <- NA
         if(pixelwise){
             cc <- Conte((rv3))
             cont <- cbind(cc$X,cc$Y)
         }else{
-            cc<-grDevices::contourLines(1:nr,1:nc,rv3,levels=ifelse(extreme,255,cutVal))
+            if(is.na(cutVal)){
+                if(extreme){
+                    cc<-grDevices::contourLines(1:nr,1:nc,rv3, levels = 255)
+                }else{
+                    cc<-grDevices::contourLines(1:nr,1:nc,rv3)
+                }
+            }else{
+                cc<-grDevices::contourLines(1:nr,1:nc,rv3,levels=ifelse(extreme,255,cutVal))
+            }
+            if(forceCenter){
+                hasCenter <- sapply(cc, function(X) point_in_polygon(px=nr/2,py=nc/2,X=cbind(X$x,X$y)))
+            }else{
+                hasCenter <- rep(TRUE, length(cc))
+            }
+            cc <- cc[hasCenter]
             cl <- unlist(lapply(cc,function(x)sum(sapply(2:length(x$x),
                                                          function(i)LineLength(c(x$x[i],x$y[i]),
                                                                                c(x$x[i-1],x$y[i-1]))))
                                 ))
+            ca <- sapply(cc,function(x)abs(otoclass:::polygon_area(cbind(x$x,x$y))))
             ## cl <- unlist(lapply(cc,function(x)length(x$x)))
-            cont <- do.call("cbind",cc[[which.max(cl)]][c("x","y")])
+            cont <- do.call("cbind",cc[[which.max(ca)]][c("x","y")])
         }
         res[[i]] <- newStart_image(cont)
         attr(res[[i]],"Position") <- levels(km$cluster)[i]
@@ -364,7 +494,10 @@ read_image<- function(file,
                                                 logisticTransformScale = logisticTransformScale,
                                                 gaussianBlurSize = gaussianBlurSize,
                                                 gaussianBlurSigma = gaussianBlurSigma,
-                                                floodFillTolerance = floodFillTolerance)
+                                                floodFillTolerance = floodFillTolerance,
+                                                floodFillCol = floodFillCol,
+                                                whiteBalance = whiteBalance,
+                                                alpha = histogramAlpha)
         attr(res[[i]],"ImagePixels") <- c(nc,nr)
         attr(res[[i]],"Normalized") <- FALSE
         attr(res[[i]],"Flipped") <- c(FALSE,FALSE)
@@ -375,11 +508,14 @@ read_image<- function(file,
     attr(res,"File") <- file
     attr(res,"NoiseFactor") <- noiseFactor
     attr(res,"Transformation") <- list(transformations = transformations,
-                                            logisticTransformLocation = logisticTransformLocation,
-                                            logisticTransformScale = logisticTransformScale,
-                                            gaussianBlurSize = gaussianBlurSize,
-                                            gaussianBlurSigma = gaussianBlurSigma,
-                                            floodFillTolerance = floodFillTolerance)
+                                       logisticTransformLocation = logisticTransformLocation,
+                                       logisticTransformScale = logisticTransformScale,
+                                       gaussianBlurSize = gaussianBlurSize,
+                                       gaussianBlurSigma = gaussianBlurSigma,
+                                       floodFillTolerance = floodFillTolerance,
+                                       floodFillCol = floodFillCol,
+                                       whiteBalance = whiteBalance,
+                                       alpha = histogramAlpha)
     attr(res,"ImagePixels") <- c(nc,nr)
     class(res) <- "otolith_image"
     return(res)
@@ -396,12 +532,12 @@ read_image<- function(file,
 ##' @return A normalized Otolith Image
 ##' @author Christoffer Moesgaard Albertsen
 ##' @export
-normalize_image <- function(dat,n,datCompare=NULL,forceFlip=FALSE,flipByPosition = c("No","Left","Right")){
+normalize_image <- function(dat,n,datCompare=NULL,forceFlip=FALSE,flipByPosition = c("No","Left","Right", startByPolar = FALSE)){
     flipByPosition <- match.arg(flipByPosition)
     datNew <- rotate_image(dat)
     datNew <- center_image(datNew)
     datNew <- scale_image(datNew)
-    datNew <- newStart_image(datNew)
+    datNew <- newStart_image(datNew, startByPolar)
     datNew <- setNumObs_image(datNew,n)
     if(!is.null(datCompare)){
         dcNorm <- normalize_image(datCompare,n)

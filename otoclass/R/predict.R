@@ -6,10 +6,17 @@ getProportion <- function(f, data, indx){
     if(is.null(f$sdr)){
         betaTheta <- as.vector(f$pl$betaTheta)
         Sigm <- matrix(NA_real_,length(betaTheta),length(betaTheta))
-    }else{       
+    }else{
+        p0 <- as.list(fit$sdr,"Estimate")$betaTheta
+        if(!is.null(fit$tmb_map$betaTheta)){
+            m0 <- fit$tmb_map$betaTheta
+        }else{
+            m0 <- seq_along(p0)
+        }
+        Sigm <- matrix(0,length(p0),length(p0))
         ssdr <- summary(f$sdr)
-        betaTheta <- unname(ssdr[rownames(ssdr)=="betaTheta",1])
-        Sigm <- f$sdr$cov.fixed[rownames(f$sdr$cov.fixed) == "betaTheta",colnames(f$sdr$cov.fixed) == "betaTheta"]
+        betaTheta <- p0[] # unname(ssdr[rownames(ssdr)=="betaTheta",1])
+        Sigm[!is.na(m0),!is.na(m0)] <- f$sdr$cov.fixed[rownames(f$sdr$cov.fixed) == "betaTheta",colnames(f$sdr$cov.fixed) == "betaTheta"]
     }
     X <- model.matrix(f$termsTheta,data = data, xlev=f$xlevelsTheta)
     fn <- function(p) {
@@ -73,7 +80,7 @@ getGroupProportion.mlld <- function(f, data, randEff = TRUE,...){
                                                    transpose = TRUE,
                                                    row.names = FALSE,
                                                    xlev = f$xlevelsTheta)
-    tmb_data$XTheta_pred <- as(tmb_data$XTheta_pred,"dgTMatrix")
+    tmb_data$XTheta_pred <- as(tmb_data$XTheta_pred,"TsparseMatrix")
      ## Handle random effects
     if(!is.null(lme4::findbars(f$call$formulaProportion)) & randEff){
         mf <- model.frame(lme4::subbars(f$call$formulaProportion),f$data)
@@ -95,7 +102,7 @@ getGroupProportion.mlld <- function(f, data, randEff = TRUE,...){
                 ZTtmp[[ii]][,kk] <- 0
         }    
         ZT <- lapply(ZTtmp,function(xx){
-            as(xx,"dgTMatrix")
+            as(xx,"TsparseMatrix")
         })
         ## ZTnms <- rtZT$cnms
         ## ZTrdim <- sapply(rtZT$cnms,length)
@@ -169,16 +176,16 @@ getGroupMeans.mlld <- function(f, data, keep.cov = FALSE, ...){
                                                    transpose = TRUE,
                                                    row.names = FALSE,
                                                    xlev = f$xlevels)
-    if(inherits(tmb_data$X_pred,"dgCMatrix"))
-        tmb_data$X_pred <- as(tmb_data$X_pred,"dgTMatrix")    
+    if(!inherits(tmb_data$X_pred,"TsparseMatrix"))
+        tmb_data$X_pred <- as(tmb_data$X_pred,"TsparseMatrix")    
 
     tmb_data$XCom_pred <- Matrix::sparse.model.matrix(f$termsCommon,
                                                       data = data,
                                                       transpose = TRUE,
                                                       row.names = FALSE,
                                                       xlev = f$xlevelsCommon)
-    if(inherits(tmb_data$XCom_pred,"dgCMatrix"))
-        tmb_data$XCom_pred <- as(tmb_data$XCom_pred,"dgTMatrix")    
+    if(!inherits(tmb_data$XCom_pred,"TsparseMatrix"))
+        tmb_data$XCom_pred <- as(tmb_data$XCom_pred,"TsparseMatrix")    
 
     obj <- TMB::MakeADFun(data = tmb_data,
                      parameters = tmb_par,
@@ -280,44 +287,45 @@ predict.mlld <- function(x, y = NULL, data = NULL, group = NULL, proportionGroup
                 y <- matrix(y,ncol = 1)
             }else{
                 stop("y must be a matrix of observations")
-            }
+            }        
         ## Check size of y:
-
+        
         dat <- x$tmb_data
         if(is.null(data))
             data <- data.frame(ID = 1:nrow(y))
         dat$Y_pred <- t(y)
-
+        if(length(setdiff(unique(c(x$all_vars,x$all_varsCommon,x$all_varsLogScale,x$all_varsTheta)), colnames(data))) > 0)
+            warning("The new data is missing",)
 ##### Prepare model matrix #####
         dat$X_pred <- Matrix::sparse.model.matrix(x$terms,
-                                                  data = data,
+                                                  data = model.frame(x$terms, data, na.action = na.pass),
                                                   transpose = TRUE,
                                                   row.names = FALSE,
                                                   xlev = x$xlevels)
-        dat$X_pred <- as(dat$X_pred,"dgTMatrix")
+        dat$X_pred <- as(dat$X_pred,"TsparseMatrix")
 
 ##### Prepare scale model matrix #####
         dat$XCom_pred <- Matrix::sparse.model.matrix(x$termsCommon,
-                                                     data = data,
+                                                     data = model.frame(x$termsCommon,data, na.action = na.pass),
                                                      transpose = TRUE,
                                                      row.names = FALSE,
                                                      xlev = x$xlevelsCommon)
-        dat$XCom_pred <- as(dat$XCom_pred,"dgTMatrix")
+        dat$XCom_pred <- as(dat$XCom_pred,"TsparseMatrix")
 
         dat$XLogScale_pred <- Matrix::sparse.model.matrix(x$termsLogScale,
-                                                     data = data,
+                                                     data = model.frame(x$termsLogScale,data, na.action = na.pass),
                                                      transpose = TRUE,
                                                      row.names = FALSE,
                                                      xlev = x$xlevelsLogScale)
-        dat$XLogScale_pred <- as(dat$XLogScale_pred,"dgTMatrix")
+        dat$XLogScale_pred <- as(dat$XLogScale_pred,"TsparseMatrix")
 
  ##### Prepare proportion model matrix #####
        dat$XTheta_pred <- Matrix::sparse.model.matrix(x$termsTheta,
-                                                       data = data,
+                                                       data = model.frame(x$termsTheta,data, na.action = na.pass),
                                                        transpose = TRUE,
                                                        row.names = FALSE,
                                                        xlev = x$xlevelsTheta)
-        dat$XTheta_pred <- as(dat$XTheta_pred,"dgTMatrix")
+        dat$XTheta_pred <- as(dat$XTheta_pred,"TsparseMatrix")
 
         ## HANDLE RANDOM EFFECTS!
         

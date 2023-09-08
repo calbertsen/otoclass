@@ -59,6 +59,7 @@ extern "C" {
     CALLDEF(convol2d,2),
     CALLDEF(knn,5),
     CALLDEF(polygon_area,2),
+    CALLDEF(point_in_polygon,4),
     CALLDEF(efd2coordSEXP,4),
     CALLDEF(efd,3),
     CALLDEF(scanlineFill,5),

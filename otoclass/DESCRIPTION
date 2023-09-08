@@ -17,7 +17,7 @@ Imports:
     jpeg,
     png,
     tiff,
-    Matrix,
+    Matrix (>= 1.5-0),
     methods,
     graphics,
     expm,

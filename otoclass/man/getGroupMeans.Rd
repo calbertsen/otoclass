@@ -5,9 +5,9 @@
 \alias{getGroupMeans.mlld}
 \title{Calculate group means for a data frame of covariates}
 \usage{
-getGroupMeans(f, data)
+getGroupMeans(f, data, ...)
 
-\method{getGroupMeans}{mlld}(f, data, keep.cov = FALSE)
+\method{getGroupMeans}{mlld}(f, data, keep.cov = FALSE, ...)
 }
 \arguments{
 \item{f}{}

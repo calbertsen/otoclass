@@ -5,9 +5,9 @@
 \alias{getGroupProportion.mlld}
 \title{Calculate group proportions for a data frame of covariates}
 \usage{
-getGroupProportion(f, data)
+getGroupProportion(f, data, ...)
 
-\method{getGroupProportion}{mlld}(f, data, randEff = TRUE)
+\method{getGroupProportion}{mlld}(f, data, randEff = TRUE, ...)
 }
 \arguments{
 \item{f}{}

@@ -44,6 +44,7 @@ mlld(
   lower = list(),
   upper = list(),
   guessStartingValues = TRUE,
+  imputeMissing = FALSE,
   ...
 )
 }
